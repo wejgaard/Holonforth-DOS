@@ -1,0 +1,673 @@
+Module: Target
+
+Group: Befehle
+
+Der Host kontrolliert das Target mit generischen Befehlen. Die Befehle
+werden in TARGET-XX umgesetzt in das Monitorprotokoll des Zielsystems.
+
+Targetadressen werden als 32 Bit Åbergeben und in TARGET-XX abgepasst. 
+
+Word: OpenTarget
+
+\ Initialisiert die Kommunikation zum Zielsystem. Bsp. richtet COM-Port
+\ ein. 
+Doer OpenTarget 
+
+Word: CloseTarget
+
+\ Schliesst die Kommunikation mit dem Zielsystem. Bsp. Schaltet COM-Port
+\ aus. 
+Doer CloseTarget 
+
+Word: InitTarget
+
+\ Initialisiert den Code im Zielsystem, schaltet Tasks ab, setzt die
+\ Taskkette auf Monitor -- Main. 
+Doer InitTarget 
+
+Word: TargetReset
+
+\ Sendet Resetsignal an Targetboard Åber die aktuelle Konfiguration,
+\ falls implementiert. 
+Doer TargetReset 
+
+Word: zSendTarget
+
+\ zCodefenster zum Target senden. FÅr allgemeines Laden von Code und auch
+\ fÅr den Transfer des Datenstacks benutzt. 
+Doer zSendTarget 
+
+Word: xSendTarget
+
+\ xCodefenster zum Target senden. Codeart ist abhÑngig vom Target. 
+Doer xSendTarget 
+
+Word: zReadTarget
+
+\ 16 Bytes zCode aus dem Target holen ab tadr. FÅr Showcode. 
+Doer zReadTarget   ( tadr -- ) 
+
+Word: xReadTarget
+
+\ 16 Bytes xCode aus dem Target holen ab tadr. FÅr Showcode. 
+Doer xReadTarget   ( tadr -- ) 
+
+Word: rReadTarget
+
+\ Liest den Returnstack fÅr den Debugdisplay. Spezialform von zReadTarget
+\ notwendig, da die Details des targetabhÑngigen RStacks hierin verpackt
+\ werden. 
+Doer rReadTarget 
+
+Word: zSendCell
+
+\ Schreibt w in tadr, nur in Speicherimage (nicht in Codefile). Wird nur
+\ transient verwendet bei Execute, direkt und im Debugger. Byteordnung
+\ wird in !zt an das Zielsystem angepasst. 
+Doer zSendCell   ( w tadr -- ) 
+
+Word: zReadCell
+
+\ Liest w aus dem Targetspeicher, Byteordnung wird erst in @zt
+\ korrigiert. 
+Doer zReadCell   ( tadr -- w ) 
+
+Word: xSend/ReadCell
+
+Text: xSend/ReadCell 
+Sind nicht notwendig, da xCode zusammen mit dem xCodefenster gesendet
+wird, wenn mal xCode geÑndert wird. 
+
+Word: Send/ReadByte
+
+Text: Send/ReadByte
+Sind nicht implementiert, wÑren aber praktisch in 8bit Zielsystemen.
+s. SetByte in H11 
+
+Word: ExecuteTarget
+
+\ Sendet Stack und CPU-Register zum Target, fÅhrt das Wort bei tadr aus,
+\ wartet bis Wort beendet ist und kopiert Stack und CPU Register zurÅck
+\ zum Host. 
+Doer ExecuteTarget   ( tadr -- ) 
+
+Word: SetBreakvector
+
+\ Setzt im Target den Break-Interruptvektor. Der Breakvektor kann auch 
+\ direkt von Targetmonitor gesetzt werden (H11). 
+Doer SetBreakvector 
+
+Word: SetErrorBreak
+
+\ Setzt eventuell einen speziellen Errorbreak-Vektor (Bsp. H86). 
+Doer SetErrorBreak 
+
+Word: ?Online
+
+\ Testet, ob das Zielsystem reagiert. Resultat im Flag Monitor?. 
+Doer ?Online 
+
+Word: Living?
+
+\ True, wenn Programm lebt, oder wenn Umdefinitionen immer ans Ende
+\ kommen sollen. Im Prinzip sollte der Monitor feststellen, ob das
+\ Programm lÑuft. Wir kînnen aber auch das Flag festlegen in TARGETXX. 
+Doer Living? 
+
+Word: Protect
+
+\ Mîglichkeit, den RAM-Speicher zu schÅtzen gegen Uebrschreiben durch das
+\ Programm. In H-11 z.B. mittels einer Modemleitung. 
+Doer Protect 
+
+Word: Unprotect
+
+\ Den Schreibschutz des RAMs ausschalten, damit der Host das Programm
+\ Ñndern kann. 
+Doer Unprotect 
+
+Word: Download
+
+\ Routine zum Herunterladen des aktuellen Programmcodes. 
+Doer Download 
+
+Word: BuildTurnkey
+
+\ Routine zum Erstellen eines selbststartenden Programms aus dem
+\ vorhandenen Code. Bsp. .EXE oder PROM-Image. 
+Doer BuildTurnkey 
+
+Word: ?LoadAll
+
+\ Wenn Fehler wÑhrend LoadAll or LoadSelected, Text neu zeigen. 4.075
+\ 4.705 
+: ?LoadAll
+     LoadAll? LoadSelected? or 
+     if WorteZeigen .Definition 7 emit then  ; 
+
+Word: LoadMeldung
+
+\ Bei Loadall und LoadSelected wird der Text aufgefrischt. 4.158 4.705 
+: LoadMeldung
+     ?LoadAll Endmeldung  ; 
+
+Group: Endian
+
+Die Bytefolge hÑngt vom Targetprozessor ab und muss bei allen
+Zugriffsworten auf den Targetcode angepasst werden. 
+- Zugriffe in Codefenster:    !t, @t (Host)
+- Zugriffe in Targetspeicher: Send/ReadCell (Target).
+- Zugriffe in Codefile:       !/@Codefile  (Host) 
+
+Word: HiLo?
+
+\ true bei big-endian (Motorola), false bei little-endian (Intel).
+\ Big-endian: most significant byte is stored at lower memory address. 
+Doer HiLo? 
+
+Word: ?flip
+
+\ Bytefolge flippen, wenn Targetprozessor big-endian ist. 
+: ?flip   ( ab -- ba › ab )
+     hilo? if flip then  ; 
+
+Word: ?flip2nd
+
+\ Eventuell Second-On-Stack flippen. 
+: ?flip2nd   ( n1 n2 -- n1' n2 )
+     >r ?flip r>  ; 
+
+Word: ?flip3rd
+
+\ Eventuell w unter d flippen. 
+: ?flip3rd   ( w d -- w' d )
+     2>r ?flip 2r>  ; 
+
+Word: !t
+
+\ Schreibt in einen Hostbuffer (Codefenster, Stackbuffer) bei Adresse adr
+\ (16 bit) und passt die Byteordnung dem Target an. 
+: !t   ( w adr -- )
+     ?flip2nd !  ; 
+
+Word: @t
+
+\ Liest aus einem Hostbuffer und korrigiert die Byteordnung des Targets. 
+: @t   ( adr -- w )
+     @ ?flip  ; 
+
+Word: d@t
+
+\ Liest d aus Hostbuffer bei adr. 
+: d@t   ( adr -- d )
+     >r hilo?
+     if   r@ @t r> 2+ @t
+     else r@ 2+ @t r> @t
+     then  ; 
+
+Word: c@t,c!t
+
+Text: c@t,c!t
+  Sind identisch mit c@ und c!, daher nicht definiert. 
+
+Word: !zt
+
+\ w in Targetspeicher schreiben. 
+: !zt   ( w tadr -- )
+     ?flip3rd zSendCell  ; 
+
+Word: @zt
+
+\ Liest w von Target-RAM (fÅr FÑlle, in denen das DatenRAM nicht im
+\ Codefile gespiegelt ist). 
+: @zt   ( tadr -- w )
+     zReadCell ?flip  ; 
+
+Group: Online
+
+Word: MonTime
+
+\ Startzeit des Monitor=Online Tests. 
+0 integer MonTime 
+
+Word: ?MonOnline
+
+: ?MonOnline
+     try ?Online  ; 
+
+Word: =Marke
+
+: =Marke   ( c -- )
+     @xy rot  78 22 xy  emit xy  ; 
+
+Word: AutoDownload?
+
+\ Wird bestimmt in TARGET-XX. 4.034 
+Doer AutoDownload? 
+
+Word: ?Download
+
+\ LÑdt Code in Target, wenn Target neu eingeschaltet. Aber nur wenn das
+\ Feature eingeschaltet ist. Download testet selbst, ob Code vorhanden
+\ ist.
+\ Autodownload ist abschaltbar. 
+: ?Download
+     AutoDownload? 0= ?exit                            \ 4.203 4.239
+     Monitor? if Download clear TargetLeer? then  ; 
+
+Word: ?Monitor
+
+\ Monitortest, zeigt blinkenden Punkt unten rechts wenn Monitor online. 
+: ?Monitor
+     key? ?exit
+     ticks MonTime - 256 + 256 mod 18 < ?exit
+     ?MonOnline  ticks is MonTime                           \ 4.239
+     Seconds 2 mod Monitor? and Help? 0= and
+     if [char] . else 'bl then =Marke  
+     Modul? Gruppe? or Wort? or Test? or Show? or           \ 4.239 
+     Help? 0= and if .MonitorStatus then  
+     TargetLeer? if ?Download then ;                        \ 4.239 
+
+Word: AutoDownloadOn_
+
+:_ AutoDownloadOn_
+     make AutoDownload? true  ; 
+
+Word: AutoDownloadOff_
+
+:_ AutoDownloadOff_
+     make AutoDownload? false  ; 
+
+Group: Datenstack
+
+Der Host fÅhrt einen Stackpuffer, der vor der AusfÅhrung zum Target
+kopiert und nachher zurÅckgelesen wird. Der Stackpuffer enthÑlt den
+Datenstack und die aktuellen CPU-Register!
+TargetXX ist zustÑndig fÅr das Senden und Empfangen des Stackpuffers.
+cpuLen wird in TargetXX festgelegt. 
+
+Word: sMax
+
+\ Maximale Anzahl Bytes im Stackbuffer. 4.054 
+200 constant sMax 
+
+Word: sBuf
+
+\ Stackbuffer fÅr Transfer des Stacks von/zu Target. Der untere Teil
+\ (TOP) enthÑlt eine Kopie der CPU-Register des Targets. Die CPU-Register
+\ werden immer mit dem Stack gesendet. 
+create sBuf   smax allot 
+
+Word: sbuf!
+
+\ Byte c in sBuf speichern mit Grenzkontrolle. 4.143 
+: sbuf!   ( c i -- )
+     0 max smax min sbuf + c!  ; 
+
+Word: sLen
+
+\ Anzahl gÅltige Bytes im Stackbuffer inklusive CPU-Info. Stackunderflow,
+\ wenn sLen<cpuLen. 
+0 integer sLen 
+
+Word: cpuLen
+
+\ Anzahl Bytes, die in sBuf von den CPU Registern belegt werden. 
+Doer cpuLen   ( -- u ) 
+
+Word: sBuf>Stack
+
+\ Stackunderflow testen, sLen mit cpuLen vergleichen. TargetabhÑngige
+\ Details (Bsp. Bytes?) werden in TargetXX erledigt. 4.206 
+: sBuf>Stack   ( -- ... )
+     !sp  sLen sMax min is sLen         \ sLen<=sMax. 4.054
+     sLen cpuLen < 
+     if   " Stack underflow" Kurzmeldung
+     else sBuf sLen + 
+          sLen cpuLen - 0
+          ?do 2- dup @t swap 2 +loop 
+          drop
+     then  ; 
+
+Word: tSP0
+
+\ Basis des Datenstacks im Target kann frei gewÑhlt werden. 
+0. double tSP0 
+
+Word: =MainSP0_
+
+\ Meldet Target-SP0 an Host. 
+:_ =MainSP0_
+     ?>32 is tSP0  ; 
+
+Word: tSP
+
+\ Aktueller Stackzeiger im Target. Vor Execute ist er im Host bekannt,
+\ nach Execute wird er aus dem Target bestimmt (Åber sLen). 
+0. double tSP 
+
+Word: Stack>Buf
+
+\ Kopiert den Datenstack in den Stackpuffer Åber die CPU-Register, fertig
+\ zum Senden. sBuf+cpuLen = TOS der Daten. Zuoberst liegt eventuell die
+\ xt als 16 oder 32 Bit Wert korrekt fÅr Target. Der Datenstack bleibt
+\ erhalten, damit bei try-Return aus Run die Daten noch existieren. - 
+: Stack>Buf   ( ... -- )
+     depth 2* 0 max cpuLen + 
+     sMax min is sLen                   \ sLen begrenzen 
+     tSP0 sLen 0 d- is tSP              \ aktuelle tSP bestimmen 
+     depth 0>                           \ xt kann fehlen. 
+     if   depth  sMax 6 - 2/ min        \ sBuf Schutz gegen Overflow
+          sBuf cpuLen + swap
+          0 do i 1+ pick over !t 2+ loop 
+          drop
+     then  ; 
+
+Group: Execute
+
+Die zExecute-Routine des Targetmonitors hat drei Varianten: Run,
+StepColon und StepCode. Holon Åbergibt das Execution Token des
+auszufÅhrenden Wortes (oder Wortteiles) und die Adresse eines
+variantenabhÑngigen Hilfswortes (Run, GoColon, GoCode). Die Art des
+Sendens an das Target ist Plattform-abhÑngig, xt und zca kînnen auf TOS
+aber auch in einem CPU-Register Åbergeben werden.
+
+Die Adressen der Hilfsworte werden vom Target beim Laden gemeldet
+(=Run, =GoCode, =GoColon). 
+
+Word: tBreak
+
+\ ErhÑlt die tadr der Breakroutine im Target. 
+0. double tBreak 
+
+Word: =Break_
+
+:_ =Break_   ( tadr -- )
+     ?>32 is tBreak  ; 
+
+Word: tError
+
+\ ErhÑlt die tadr der ErrorBreakroutine im Target. 
+0. double tError 
+
+Word: =ErrorBreak_
+
+:_ =ErrorBreak_   ( zadr -- )
+     ?>32 is tError  ; 
+
+Word: InitExecute
+
+\ Zeigt die Executemarke und kopiert den Parameterstack in den
+\ Stackbuffer, bereit zum Senden. xt liegt eventuell auf TOS (abhÑngig
+\ vom Target). 
+: InitExecute   ( ... -- ... )
+     Monitor? 
+     if   223 =Marke   Stack>Buf
+     else " Sorry, execution not possible (target is offline)"
+          LoadMeldung
+     then  ; 
+
+Word: EndExecute
+
+\ Holt den Stackinhalt vom Stackbuffer und lîscht die Executemarke. 
+: EndExecute
+     sBuf>Stack 'bl =Marke  ; 
+
+Word: zExecute
+
+\ Gibt die Kontrolle an die Hilfsroutine tadr in Target und wartet auf
+\ Return. Die Routine startet normalerweise die Forthmaschine mit xt auf
+\ TOS. Beim Debuggen kann aber xt auch in einem CPU-Register Åbergeben
+\ werden. Dies ist targetabhÑngig. 
+: zExecute   ( ... tadr -- )
+     2>r InitExecute 2r> ExecuteTarget EndExecute  ; 
+
+Word: tRun
+
+\ Startwort im Target. Dient auch als Flag, ob Forthmaschine im Target ==
+\ Basis? Hierzu Inhalt von T und F vergleichen in Location mStart.
+\ Gebraucht in Testroutine. 
+0. double tRun 
+
+Word: =Start_
+
+:_ =Start_
+     ?>32 is tRun  ; 
+
+Word: tExecute
+
+\ Die 'normale' Execute-Routine fÅr Targetworte. FÅhrt xt aus und kehrt
+\ dann zum Host zurÅck. Der Host wartet bis das Wort beendet ist.
+\ xt wird auf die Targetcellbreite korrigiert. 
+: tExecute   ( xt -- )
+      ?>16 tRun zExecute  ; 
+
+Group: Base&CPU
+
+Word: Aktuelle_Base
+
+Text: Aktuelle_Base
+Der aktuelle Wert von Base wird direkt im Target gesetzt und aus dem
+Target gelesen. Das Target meldet die Adresse von Base Åber =Base. Base
+wird nur beim Testen von Worten nachgefÅhrt (Run, Test, Debug).
+Bei Error-Break im Target wird Base=-1 gesendet als Signal. 
+
+Word: tBase
+
+0. double tBase 
+
+Word: =Base_
+
+:_ =Base_
+     ?>32 is tBase  ; 
+
+Word: SendBase
+
+\ Base in Target schreiben. 6bu-1 Mit !zt. 
+: SendBase
+     theBase tBase !zt  ; 
+
+Word: ReadBase
+
+\ Base aus Target lesen, mit @zt (inkl. HiLo Korrektur). Auf 10..16
+\ limitieren. 
+: ReadBase
+     tBase @zt dup -1 = 
+     if " Sorry, undefined code executed - error halt" LoadMeldung then
+     10 max 16 min is theBase  ; 
+
+Word: Cpu-Register
+
+Text: Cpu-Register
+Die CPU Register Werte werden mit dem Stack transferriert. Die Werte
+bleiben in sBuf. Der Datentyp CPUReg greift auf den entpsrecheden
+Offset im sBuf zu, d.h. jede CPUReg legt den Offset und die DatenlÑnge
+(Bytes) fest. 
+
+Word: @cpu
+
+\ Wert des CPU-Registers holen aus sBuf (Byte, Wort oder Doppelwort). 
+: @cpu   ( obj -- x )
+     dup 1+ c@ sBuf + swap c@ 
+     case 
+     1 of c@ endof
+     2 of @t endof
+     4 of dup @t swap 2+ @t hilo? if swap then endof
+     " Registergrîsse wird nicht unterstÅtzt" Endmeldung
+     endcase  ; 
+
+Word: !cpu
+
+\ Wert x (Byte, Wort oder Doppelwort) in CPU-Register schreiben. 
+: !cpu   ( x obj -- )
+     dup 1+ c@ sBuf + swap c@ 
+     case
+     1 of c! endof
+     2 of !t endof
+     4 of >r hilo? if swap then r@ 2+ !t r> !t endof
+     " Registergrîsse wird nicht unterstÅtzt" EndMeldung
+     endcase  ; 
+
+Word: cpuReg
+
+\ Die Daten der CpuRegister liegen in sBuf, Register definieren mit
+\ Offset in sBuf und DatenlÑnge (#Bytes). 
+ObjectType: cpuReg
+      Data: byte, ( #bytes ) byte, ( offset )
+   Methods: @cpu !cpu !cpu 
+  Messages: get  put  is 
+
+Group: Returnstack
+
+Der Returnstack wird 1:1 vom Target geholt. Die EintrÑge werden dann
+als 16 oder 32 Bit Zahlen aus dem Puffer gelesen. 
+
+Word: rStack
+
+\ LÑnge des rStacks 
+30 constant rStack 
+
+Word: rBuf
+
+\ ErhÑlt Inhalt des Target-Returnstacks 
+create rBuf   rStack allot 
+
+Word: rLen
+
+0 integer rLen 
+
+Word: tRP0
+
+0. double tRP0 
+
+Word: =MainRP0_
+
+\ Basis des Returnstacks in Target. 
+:_ =MainRP0_
+     ?>32 is tRP0  ; 
+
+Word: t>RP
+
+\ Target-Adresse des Returnstack-Zeigers, wenn RP nicht in einem CPU
+\ Register sitzt. 
+0. double t>RP 
+
+Word: =MainRP_
+
+\ Adresse des RP in Target. 
+:_ =MainRP_
+     ?>32 is t>RP  ; 
+
+Word: tRP
+
+\ Aktueller Returnstacktop. 
+0. double tRP 
+
+Group: COM-Port
+
+ 
+
+Word: UnterWindows
+
+Text: UnterWindows
+Kommunikation tut ok bis 19,2kB. Bei Problem das Scheduling
+kontrollieren. Hintergrund, PrioritÑt=100 (gleich wie alle anderen DOS
+Fenster), Textfenster, keine SpezialitÑten. 
+
+Word: ?ComError
+
+\ Linestatus testen auf Kommunikationsfehler. 
+: ?ComError
+     Com 5 + p@ $0E and ?dup
+     if   case 
+          2 of " Overrun error" endof
+          4 of " Parity error" endof
+          drop " Framing error" endcase
+          Kurzmeldung endtry
+     then  ; 
+
+Word: ?@com
+
+\ Version fÅr Codetransfers, ohne Monitortest. Normalerweise kommt die
+\ Quittung rasch. Wenn 3 s Åberschritten werden muss ein Fehler
+\ vorliegen. 4.106 
+: ?@com   ( -- c )
+     now
+     begin 4000 msec?
+           if   " Sorry, target does not respond" Kurzmeldung
+                endtry
+           then ComData?
+     until @ComData  ; 
+
+Word: oldckeys
+
+\ Merkt sich die aktuellen Controlkeys (ctl, alt, sft). 4.106 
+0 integer oldckeys 
+
+Word: m@com
+
+\ Version fÅr Monitortest. Wenn eine Taste gedrÅckt ist (normal oder
+\ Controltaste), wird der Monitortest abgebrochen. 4.106 
+: m@com   ( -- c )
+     now  ckeys is oldckeys 
+     begin  key? ckeys oldckeys <> or if endtry then
+           2000 msec? if false is Monitor? endtry then  
+           ComData?
+     until @ComData  ; 
+
+Word: Modem
+
+\ Modem Control Register in Com Port. 
+: Modem   ( -- adr )
+     Com 4 +  ; 
+
+Word: Reset/COM
+
+\ Reset-Leitung am Targetboard ist mit DTR Signal verbunden. 
+: Reset/COM
+     Modem p@ dup 1 or Modem p!         \ Bit0 = DTR setzen
+     100 msec
+     $0E and Modem p!  ; 
+
+Word: Protect/Com
+
+\ Protectsignal ist mit RTS verbunden (Bit1 in Modem Control Register) 
+: Protect/Com
+     Modem p@ 2 or Modem p!  ; 
+
+Word: Unprotect/Com
+
+\ Protectsignal ist mit RTS verbunden (Bit1 in Modem Control Register) 
+: Unprotect/Com
+     Modem p@ $0D and Modem p!  ; 
+
+Word: Terminal
+
+: Terminal
+     page ." Terminal mode -- press ESC to return to host" cr
+     begin     ComData? if @com emit then
+               ?key ?dup 
+               if   case
+                    'Esc of exit endof
+                    !com endcase
+               then
+     again  ; 
+
+Word: =BaudRate_
+
+\ Baudrate Ñndern. 6c6-2 
+:_ =BaudRate_
+     is BaudRate InitComPort .TargetMonitor  ; 
+
+Word: =Baud_
+
+\ Baudrate Ñndern. Alias. 4.208 
+:_ =Baud_
+     is BaudRate InitComPort .TargetMonitor  ; 
+
+Word: BaudRate=_
+
+\ Baudrate auslesen zur Kontrolle. 6c6-2 
+:_ BaudRate=_
+     BaudRate  ; 
+

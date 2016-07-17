@@ -1,0 +1,349 @@
+Module: Show
+
+Group: Vergleichen
+
+Der Code in Target und Codefile wird verglichen. Teile des Codes, die
+nicht Åbereinstimmen, werden markiert. 
+
+Word: CodeAnfang
+
+0. double CodeAnfang 
+
+Word: CodelÑnge
+
+0 integer CodelÑnge 
+
+Word: }?
+
+\ true, wenn ein Limitzeichen gesetzt wurde. 
+0 integer }? 
+
+Word: ?CodeAnfang
+
+\ Codeanfang und -ende mit Klammern { .. } kennzeichnen. 
+: ?CodeAnfang    ( d -- d )
+     }? ?exit
+     2dup Codeanfang d= CodelÑnge 0> and
+     if bold [char] { lemit normal else lSpace then  ; 
+
+Word: ?CodeEnde
+
+: ?CodeEnde   ( d -- d )
+     2dup Codeanfang CodelÑnge 0 d+ d= CodelÑnge 0> and
+     if bold [char] } lemit normal true else false then is }?  ; 
+
+Word: ?Verschieden
+
+\ Wenn Byte in Target und Codefile verschieden, invers zeigen. 
+: ?Verschieden   ( dadr i -- dadr )
+     dup Targetbuf + c@ swap Filebuf + c@ <> if inverse then  ; 
+
+Group: Zeigen
+
+Word: File?
+
+\ true wenn Code von Codefile gezeigt wird. 
+Flag File? 
+
+Word: .zAdr
+
+\ Adresse normal als Byteadresse zeigen. 
+: .zAdr   ( tadr -- )
+     32? if 6 else 4 then ld.  ; 
+
+Word: .xAdr
+
+\ Adresse als Segment (Paragraph) zeigen. 
+: .xAdr   ( tadr -- )
+     16 um/ 4 lu. [char] : lemit  ; 
+
+Word: .cAdr
+
+\ Aktuelle Routine zum Zeigen der Adresse. 
+Doer .cAdr 
+
+Word: Code/Bytes
+
+: Code/Bytes   ( tadr -- )
+     2dup .cAdr    
+     lSpace false is }?  
+     16 0 
+     do   ?CodeAnfang  i ?Verschieden 
+          File? if Filebuf else Targetbuf then i + c@ .l## normal
+          1. d+ ?CodeEnde i 7 = if lSpace then   
+     loop 2drop  ; 
+
+Word: Code/Ascii
+
+: Code/Ascii
+     16 0 
+     do   File? if Filebuf else Targetbuf then i + c@
+          dup 32 < over 126 > or if drop [char] . then lEmit
+     loop  ; 
+
+Word: lCodeZeile
+
+\ Bildet eine Codezeile mit Adresse tadr und 16 Bytes in Hex-Darstellung
+\ und als Zeichen, soweit darstellbar. 
+: lCodeZeile   ( tadr -- )
+     theBase -rot hex 
+     >normal 2 add LinePos
+     File? if [char] F else [char] T then lEmit lSpace 
+     Code/Bytes lSpace 16? if lSpace lSpace then Code/Ascii 
+     is theBase  ; 
+
+Word: @Hostcode
+
+\ Code aus dem Hostspeicher lesen. 
+: @Hostcode   ( tadr -- )
+     zCode? 
+     if   drop cs: swap
+     else 16 um/ xSeg + 0 
+     then cs: Targetbuf 16 movel  ; 
+
+Word: ClearTargetbuf
+
+: ClearTargetbuf
+     Targetbuf 16 0 fill  ; 
+
+Word: ?@Targetcode
+
+\ Wenn die Kommunikation abbricht, bleiben im Targetmode, aber nur
+\ Nullbytes zeigen. 
+: ?@Targetcode   ( tadr -- )
+     try @Targetcode tryError? if ClearTargetbuf endtry then  ; \ 4.236 
+
+Word: ShowLimit
+
+\ In 16 Bit System den zCode auf 64 kB begrenzen, ebenso den xCode ausser
+\ bei einem fpc-System. 
+: ShowLimit   ( tadr1 -- tadr2 )
+     zCode? fpc? or 0=  zcode? or  16? and  if drop 0 then  ; 
+
+Word: .Code
+
+\ Zeigt den Code ab tadr im gegebenen Fenster. Bei gleichzeitigem Sft
+\ wird der Hostspeicher gezeigt. 
+: .Code   ( tadr -- )
+     Fensterhîhe 0
+     do   ShowLimit sft?
+          if   2dup @Hostcode
+          else Monitor? if 2dup ?@Targetcode else ClearTargetbuf then  
+          then 2dup @Filecode  
+          x1 1+ istLinks ComFenster ComFenster   
+          2dup lCodezeile i .Line  
+          x1 7 + istLinks ComFenster ComFenster   
+          16. d+ 
+     loop 2drop  ; 
+
+Group: Aktionen
+
+Word: zCodeAnfang
+
+0. double zCodeAnfang 
+
+Word: xCodeAnfang
+
+0. double xCodeAnfang 
+
+Word: zCodelÑnge
+
+0 integer zCodelÑnge 
+
+Word: xCodelÑnge
+
+0 integer xCodelÑnge 
+
+Word: zLast
+
+\ Endwert von Show-zCode. 
+0. double zLast 
+
+Word: xLast
+
+\ Speichert Endwert von Show-XCode. 
+0. double xLast 
+
+Word: <16Grenze
+
+\ Korrigiert tadr1 auf die vorhergehende 16 Byte Grenze. 
+: <16Grenze   ( tadr1 -- tadr2 )
+     swap 0 16 um/ 16 * swap  ; 
+
+Word: InitZCode
+
+: InitZCode
+     AktivWort @CodelÑnge dup is zCodelÑnge
+     if zca 2dup is zCodeAnfang <16Grenze is zLast then  ; 
+
+Word: InitXCode
+
+: InitXCode
+     @xCodelÑnge  fpc? if 16 * then  dup is xCodelÑnge
+     if   zca GetXca  0. dmax xEnd dmin       \ zur Vorsicht
+          fpc?
+          if   2dup is xCodeAnfang is xLast
+          else 2dup is xCodeAnfang <16Grenze is xLast 
+          then
+     then  ; 
+
+Word: AdressEingabe
+
+\ Oeffnet Feld in ShowFenster und erwartet Adresse. 
+: AdressEingabe   ( -- d )
+     inverse clear Stack$  clear Ende?  
+     make EditKey StackKey  
+     begin     x1 4 + y2 1+ xy edit Stack$
+               Ende? if normal make EditKey key  exit then
+               thebase >r hex  
+               upcase Stack$ Stack$ Number? 0= 
+               r> is thebase            
+     while     2drop 7 emit
+     repeat normal  make EditKey key  ; 
+
+Word: ShowGoto
+
+\ Show-Adresse angeben. Bei xCode UND FPC ist die Eingabe ein Paragraph,
+\ korrigieren. 
+: ShowGoto   ( tadr1 -- tadr2 )
+     AdressEingabe Ende? 0=  
+     if   zCode? 0= fpc? and if drop 16 um* then 
+          2swap 2drop 
+     then 2>r .Stack 2r>  ; 
+
+Word: .NoTarget
+
+: .NoTarget
+     Comfenster wipe " Sorry, target is offline" Kurzmeldung  ; 
+
+Group: Setup
+
+Word: ShowMenuF6
+
+Doer ShowMenuF6 
+
+Word: ShowTitel
+
+Doer ShowTitel 
+
+Word: ShowMenu
+
+: ShowMenu
+     ShowTitel
+     1 Feld" Help"            
+     2 Feld" Up"         
+     3 Feld" Down"       
+     4 Feld" Base"  
+     5 Feld" Top"
+     ShowMenuF6
+     7 Feld" Actual" 
+     8 Feld" Exit"  ; 
+
+Word: AltShowMenu
+
+: AltShowMenu
+     1 Feld" Help"
+     2 Feld" "
+     3 Feld" Target"
+     4 Feld" File"
+     5 Feld" "
+     6 Feld" GoTo"
+     7 Feld" +Code"
+     8 Feld" -Code"  ; 
+
+Word: SetupShow
+
+\ CodefilelÑnge bestimmen fÅr Readfilecode. .Module lîscht Balken. 
+: SetupShow
+     WorkModus %Show = if Comfenster exit then
+     SaveScreen  y3 is theY3 .Module 
+     Monitor? 0= if set File? then
+     Comfenster wipe 
+     Codefile Filelength is CodefileLÑnge
+     " [CODE]" MenuTitel  ; 
+
+Word: ResetShow
+
+\ 'Off-line' kann durch RestoreScreen gelîscht werden, daher Monitor-
+\ status nochmal schreiben. Sicherheitshalber den Text neu holen. 
+: ResetShow
+     Show? 0= Info? 0= and              \ ExitShow == Modus<>Show
+     if   RestoreScreen  theY3 is y3  
+          y3 1- istUnten ComFenster  y3 1+ istOben DefFenster
+          .MonitorStatus  try @Text
+     then  ; 
+
+Group: Routine
+
+Word: sCharCase/End?
+
+\ [Workmodus setzen, da er als Flag dient fÅr RÅckkehr von Help]
+\ Zu rufenden Modus zurÅck. 
+: sCharCase/End?   ( n c -- n f )
+     false swap 
+     case 'Esc of drop Callmodus dup is Modus is Workmodus true endof
+          $5F and
+          [char] F of set File? endof
+          [char] T of Monitor? if clear File? else .NoTarget then
+                     endof
+     drop endcase  ; 
+
+Word: sFuncCase1
+
+\ Liefert c=0, wenn Match gefunden. 
+: sFuncCase1   ( d1 c -- d2 c )
+     case   'Up of $10. d- endof
+          'Down of $10. d+ endof
+          'PgUp of $100. d- endof
+          'PgDn of $100. d+ endof
+          ^PgUp of $1000. d- endof
+          ^PgDn of $1000. d+ endof
+          altF3 of Monitor? if false is File? ( else .NoTarget) then
+                     endof
+          altF4 of true is File? endof
+          altF6 of ShowGoto endof
+          altF7 of +ComFenster ComFenster endof
+          altF8 of -ComFenster ComFenster endof
+     exit endcase  0  ; 
+
+Word: sFuncCase2/End?
+
+\ ZurÅck zu Callmodus. Info kontextabhÑngig. 
+: sFuncCase2/End?   ( d1 c -- d2 f )
+     case F1 of " F2=Up" Info true exit endof            
+          altF1 of " Alt+F3=Target" Info true exit endof 
+          F2 of Fensterhîhe 1- - endof
+          F3 of Fensterhîhe 1- + endof
+          F4 of 2drop zCode? if zBegin else xBegin then endof
+          F5 of 2drop zCode? if zEnd else xEnd then endof
+          F6 of zCode? 0= is zCode? %Show is WorkModus true exit endof
+          F7 of 2drop Codeanfang endof
+          F8 of Callmodus dup is Modus is WorkModus true exit endof
+     drop endcase false  ; 
+
+Word: ShowCode
+
+\ Bei Lesefehler (TryError) den Parameter (Adresse) lîschen. 
+: ShowCode    ( tadr -- )
+     SetupShow 
+     begin     Alt? if AltShowMenu else ShowMenu then
+               2dup try .Code tryError? if 2drop then
+               2dup zCode? if is zLast else is xLast then  
+               fkey? ?dup
+               if   sCharCase/End? 
+               else sFuncCase1 sFuncCase2/End? 
+               then if 2drop ResetShow exit then 
+               ?Monitor CheckDepth
+     again  ; 
+
+Word: ShowRoutine
+
+\ [Wenn Workmodus=%Show ist, sind wir von Help zurÅckgekommen.] 
+: ShowRoutine
+     WorkModus %Show <> if InitZCode InitXCode then
+     zCode? 
+     if   zLast zCodeAnfang zCodelÑnge 
+     else xLast xCodeAnfang xCodelÑnge 
+     then is CodelÑnge is CodeAnfang
+     try ShowCode  ; 
+

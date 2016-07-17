@@ -1,0 +1,690 @@
+Module: Worte
+
+Group: Fenstergrenze
+
+Word: DefUnten
+
+\ Untergrenze des Deffensters. 
+: DefUnten   ( -- n )
+     Deffenster wcorners nip nip nip  ; 
+
+Word: up?
+
+\ True wenn Fenstergrenze nach oben geschoben wird. 
+Flag up? 
+
+Word: DeltaComDef
+
+\ Fenster verschieben, RahmenlÅcke fÅllen. Auch Modul und Gruppenmodi. 
+: DeltaComDef  
+     >rahmen  up?
+     if   x1 y3 1- x4 DefUnten 1 scrollup  
+          DefUnten x1 over .|  x4 swap .|  
+     else x1 y3 x4 DefUnten 1 scrolldn  x1 y3 .|  x4 y3 .|  
+     then y3 up? if 1- else 1+ then is y3  normal
+     y3 1- istUnten ComFenster  
+     y3 1+ Modul? Gruppe? or if 1+ then istOben DefFenster  ;  \ 4.024 
+
+Word: ComDefEdit
+
+\ Fenster korrekt auffrischen mit Cursor auf sichtbarer Zeile und
+\ NachfÅhren der ersten Zeile ist garnicht so leicht. So tut es. 
+: ComDefEdit
+     Def?
+     if   up? 
+          if   InitDef y0 1- >y0  cur >cur .Buffer
+          else InitCom y0 1- >y0 .Buffer >Definition 
+          then
+     else up? 
+          if   InitDef y0 1- >y0 .Buffer >Comment 
+          else InitCom y0 1- >y0  cur >cur .Buffer
+          then
+     then  ; 
+
+Word: ChangeComDef
+
+\ Grenze zwischen Com- (bzw. Code-) und Deffenster eine Zeile schieben. 
+: ChangeComDef   
+     DeltaComDef  
+     Show?
+     if   up? if ShowDef then
+     else Edit?
+          if   ComDefEdit
+          else up? if ShowDef else ShowCom then
+          then
+     then  ; 
+
+Word: -ComFenster
+
+: -ComFenster
+     Comfenster Fensterhîhe 1 > 
+     if set Up? ChangeComDef then ; 
+
+Word: +ComFenster
+
+: +ComFenster
+     DefFenster Fensterhîhe 1 >
+     if clear Up? ChangeComDef then  ; 
+
+Group: WortStack
+
+Word: WortStack
+
+100 Stack WortStack 
+
+Word: ClrWortStack
+
+: ClrWortStack
+     init WortStack  ; 
+
+Word: SubWord?
+
+\ true wenn Stack nicht leer. Wortstack wird in verschiedenen Routinen
+\ benutzt und bei jedem 'GoSub' mit je 1 (Load), 2 (Hypertext) oder 3
+\ (Debug) EintrÑgen belegt. 
+: SubWord?   ( -- f )
+     adr WortStack 2+ @ 0>  ; 
+
+Group: HashTabelle
+
+Word: HashTabelle
+
+\ Tabelle fÅr 69 Zeiger zu Alfaliste, 
+\ Offset 0 => ascii 0..32,  
+\ Offset 1..64 => ascii 33..96 und ascii 97..122, 
+\ Offset 65..69 => ascii 123..127 
+create HashTabelle   140 allot 
+
+Word: HashAdr
+
+\ Liefert adr von Eintrag beginnend mit c, kleine Buchstaben sind
+\ bereits in grosse gewandelt.  [Bit 5 ist gleich null gesetzt, daher
+\ liegt c in zwei Gruppen: 1..31 und 64..94; werden abgebildet in 0..61] 
+: HashAdr   ( c -- adr )
+     dup 33 <
+     if   drop 0
+     else dup 97 <
+          if   32 -
+          else dup 123 < if 64 - else 58 - then
+     then then
+     0 max 69 min 2* HashTabelle +  ; 
+
+Word: 1Char
+
+\ Anfangszeichen von Eintrag in Uppercase 
+: 1Char   ( eintrag -- c )
+     Name 1+ c@s dup 96 > over 123 < and if 32 - then  ; 
+
+Word: Hash
+
+\ Alfatabelle fÅllen mit Zeigern zum jeweils ersten Eintrag in der
+\ Alfaliste fÅr jeden Buchstaben. 
+: Hash
+     HashTabelle 140 0 fill
+     AlfaAnker
+     begin     AlfaNachfolger dup
+     while     dup 1Char HashAdr @ 0=  
+               if dup dup 1Char HashAdr ! then
+     repeat drop  ; 
+
+Word: Name<>Word?
+
+\ Optimierter Namenvergleich 
+: Name<>Word?   ( eintrag -- f )
+     Name$ @name  upcase Name$  Name$ Word$ "<>  ; 
+
+Word: FindEintrag
+
+\ Eintrag suchen mit Name = Word$ (wurde bereits in upcase gewandelt) 
+: FindEintrag   ( -- eintrag | 0 )
+     Word$ 1+ c@ dup                    \ erstes Zeichen
+     HashAdr @ dup
+     if   begin     dup Name<>Word?
+          while     AlfaNachfolger 2dup 1Char <> 
+                    if 2drop 0 exit then
+          repeat
+     then  nip  ; 
+
+Group: Hypertext
+
+Word: GetWort
+
+\ Wort bei Cursor zu Word$ schieben und seinen Eintrag liefern, falls
+\ vorhanden. 
+\ 65u Logik Ñndern, nicht '1 cur+ -fw ... -1 cur+'.  b32-5 
+: GetWort   ( -- eintrag | false )
+     cur 1- pos c@ 32 > if -fw else cur then is >in  
+     Buf is tib  blen is #tib  ParseWord  upcase Word$ FindEintrag  ; 
+
+Word: WSFull
+
+: WSFull
+     " Sorry, wordstack is full" EndMeldung  ; 
+
+Word: GoWort
+
+\ Ann.: GoWort wird nie in Modul- oder Gruppenmodus gerufen. 
+: GoWort   ( eintrag -- )
+     dup FindGruppe dup FindModul
+     is AktivModul is AktivGruppe is AktivWort
+     try @Text  ;                           \ 4.021 4.033 
+
+Word: SaveText
+
+\ Wort immer neu abspeichern. Kann z.B. CR zufÅgen, ohne damit Change zu
+\ setzen. Doppeldefinitionen werden dabei auch automatisch korrigiert,
+\ wenn der DoppelgÑnger beseitigt ist. 
+: SaveText
+     !Text  ( " edited" Log )  ;                            \ 4.211 
+
+Word: GoSub
+
+\ Wird auch aus Comment gerufen, daher Def? speichern. [Cursor wird mit
+\ Wort abgelegt, muss nicht gerettet werden.] Nach GoWort Listen und Text
+\ zeigen. 
+: GoSub
+     GetWort ?dup
+     if   dup AktivWort = if drop exit then
+          make PushMsg WSFull
+          Def? push WortStack  AktivWort push WortStack 
+          SaveText GoWort ShowAll                      \ 4.021 4.099
+          >Definition  
+     else Def? " Sorry, this is no target word" KurzMeldung
+          if >Definition then
+     then ; 
+
+Word: GoBack?
+
+\ true, wenn oberster Wortlevel, verlÑsst Editor. RÅckkehr auch zu
+\ Comment mîglich. Nach GoWort Listen und Text zeigen. 
+: GoBack?   ( -- f )
+     SubWord? 0= if true exit then
+     SaveText
+     pop WortStack GoWort ShowAll           \ 4.021
+     pop WortStack if >Definition  else >Comment then 
+     false  ; 
+
+Group: Bookmarks
+
+Holon merkt sich die Worte, die bearbeitet werden, und lÑsst uns direkt
+zu den zuletzt bearbeiteten Worten zurÅck- und wieder vorspringen. Die
+WorteintrÑge kommen in eine Merk-Liste als 'Marken'. 
+
+Word: Marken
+
+\ Holon speichert die letzten 30 Worte, die "beachtet" wurden. Die Marken
+\ gelten nur fÅr Worte, nicht fÅr Modul- oder Gruppentexte. 
+30 constant Marken 
+
+Word: MarkBuf
+
+\ Ringpuffer fÅr die Marken. 
+create MarkBuf   Marken 2* allot 
+
+Word: TopMarke
+
+\ Zeigt auf freien Platz oberhalb letzten Eintrag   0..marken-1 
+0 integer TopMarke 
+
+Word: AktMarke
+
+\ Zeigt auf aktuelle Marke  0..marken-1 
+0 integer AktMarke 
+
+Word: MarkAdr
+
+\ Liefert adr zu Index i in Markenpuffer. 
+: MarkAdr   ( i -- adr )
+     Marken mod 2* Markbuf +  ; 
+
+Word: Marke!
+
+\ eintrag als i-te Marke speichern. 
+: Marke!   ( eintrag i -- )
+     MarkAdr !  ; 
+
+Word: Marke@
+
+\ eintrag aus i-ter Marke lesen. 
+: Marke@   ( i -- eintrag )
+     MarkAdr @  ; 
+
+Word: ClrMarken
+
+\ Wenn ein neues Projekt begonnen wird oder der Host mit einer fremden
+\ Struktur verbunden wird, stimmen die Marken nicht und fÅhren ins
+\ Nirwana. Daher die Marken lîschen. -- Eine fremde Struktur wird erkannt
+\ durch eine andere Anzahl EintrÑge. s. ProjektEintrÑge . 
+: ClrMarken
+     0 is TopMarke  0 is AktMarke  ; 
+
+Word: MarkenSchieben
+
+\ Von i bis top die Marken einen Platz nach unten schieben. 4.0102 
+: MarkenSchieben   ( i -- )
+     TopMarke swap do i 1+ Marke@ i Marke! loop  ; 
+
+Word: WortInListe?
+
+\ n ist die Position in der Liste, falls das Wort vorhanden ist. 4.0102 
+: WortInListe?   ( -- n true › false )
+     TopMarke 0
+     ?do  i Marke@ AktivWort = if i true leave&exit then
+     loop false  ; 
+
+Word: WortMerken
+
+\ AktivWort als oberste BookMark ablegen. Wenn das Wort bereits in der
+\ Liste ist, wird es einfach nach oben geholt (und der Rest einen Platz
+\ nach unten geschoben). Wenn die Liste voll ist, wird alles eins nach
+\ unten geschoben und der Eintrag oben angehÑngt. Im Helpmodus keine
+\ Bookmarks sammeln. 
+: WortMerken
+     Help? ?exit                                            \ 4.243
+     WortInListe?
+     if   MarkenSchieben  -1 add TopMarke 
+     else TopMarke Marken = if 0 Markenschieben -1 add TopMarke then
+     then
+     AktivWort TopMarke Marke!  TopMarke is AktMarke  1 add TopMarke  ; 
+
+Word: PrevWord
+
+\ Zu vorigem Wort, das in der Alfaliste ist. Wenn Aktmarke =0, nichts
+\ tun. 4.025 4.0102 4.129 
+: PrevWord
+     AktMarke 1+ 1
+     ?do  AktMarke i - Marke@ InAlfa?             \ 4.129
+          if AktMarke i - dup is AktMarke Marke@ 
+             %Wort is Modus GoWort leave then     \ 4.102 
+     loop  ; 
+
+Word: LaterWord
+
+\ Jeweils ein Wort vor statt direkt ans aktuelle Ende. Worte
+\ Åberspringen, die nicht in der Alfaliste sind. 4.025 4.102 
+: LaterWord
+     TopMarke 0= ?exit
+     TopMarke AktMarke 1+ 
+     ?do  i Marke@ InAlfa?                             \ 4.129  
+          if   i is AktMarke i Marke@ %Wort is Modus   \ 4.0102 
+               GoWort leave 
+          then 
+     loop  ; 
+
+Group: Search
+
+Sammelt die Suchroutinen. Wir unterscheiden Suche nach Text (F5=Find)
+und Suche nach einem Wort (Alt+F5=UsedBy). FindOn sucht weiter nach
+Text oder Wort, je nachdem was vorher gesucht wurde. 
+
+Word: Find$
+
+\ Der Suchstring bei Find&Replace. Wird in Search$ kopiert fÅr die Suche. 
+/Name StringBuf Find$ 
+
+Word: Replace$
+
+\ Der Ersatzstring bei Find&Replace. 
+/Name StringBuf Replace$ 
+
+Word: InitFind$
+
+: InitFind$ 
+     " " put Find$  " " put Replace$  ; 
+
+Word: Gefunden?
+
+0 integer Gefunden? 
+
+Word: Gross
+
+\ Zeichen in Grossbuchstaben verwandeln. 4.131 
+Code Gross   ( c1 -- c2 )
+     pop ax  cmp al, # $60 > 
+     if cmp al, # $7B < if sub al, # $20 then then
+     1push 
+
+Word: StringGleich?
+
+\ Vergleich von Text in Search$ mit Text in Buffer ab Position >in. 4.131 
+: StringGleich?   ( -- f )
+     true  obj Search$ 1+ c@
+     times obj Search$ 2+ i + c@  Buf >in + i + c@ Gross
+           <> if 0= leave&exit then
+     loop  ; 
+
+Word: SearchText
+
+\ Im aktuellen Wort einen Text suchen. 4.131 
+: SearchText
+     Def>Tib   
+     begin     StringGleich?
+               if   >in is Cur 
+                    AktivWort is OldWort
+                    true is gefunden?  exit
+               then 1 add >in  >in #tib 2- > 
+     until  ; 
+
+Word: SearchWord
+
+\ Im aktuellen Wort ein Wort suchen. (4.131) 
+: SearchWord
+     Def>Tib   
+     begin     ParseWord upcase Word$  Word$ Search$ "=
+               if   >in is Cur -fw is Cur
+                    AktivWort is OldWort
+                    true is gefunden?  exit
+               then >in #tib 2- > 
+     until  ; 
+
+Word: SearchInWord
+
+\ Searchroutine umschalten zwischen Wort- und Textsuche. 4.131 
+Doer SearchInWord 
+
+Word: NextWord
+
+\ Geht zu nÑchstem Wort. Wenn das Modul Ñndert, werden die Module
+\ gezeigt. Wenn das Wort nicht Ñndert (weil am Ende), wird Ende? true.
+\ .Text liest den neuen Text ein. 
+: NextWord
+     AktivWort AktivModul  
+     +Wort  
+     AktivModul <> if Modulezeigen then
+     AktivWort = is Ende? .wText  0 is DefCur  ; 
+
+Word: WipeForSearch
+
+: WipeForSearch
+     GruppeFenster wipe WortFenster wipe DefFenster wipe
+     " Searching for:  " Meldung print Find$ normal 
+     DefFenster  ; 
+
+Word: doSearch
+
+: doSearch
+     begin     SearchInWord gefunden? fertig? or not   
+     while     NextWord   
+     repeat  ; 
+
+Word: StartModul
+
+0 integer StartModul 
+
+Word: StartGruppe
+
+0 integer StartGruppe 
+
+Word: StartWort
+
+\ Das Wort, bei dem die Suche gestartet wird. 4.083 
+0 integer StartWort 
+
+Word: Ausgangszustand
+
+: Ausgangszustand
+     AktivModul is StartModul  AktivGruppe is StartGruppe 
+     AktivWort is Startwort  ; 
+
+Word: ZuAusgangszustand
+
+\ Ausgangszustand bei Search wiederherstellen, wenn Suche erfolglos.
+\ Display auffrischen mit Neuzeigen. [Mit oberster Stufe beginnen beim
+\ Aendern, da Unterstufen in Oberstufe vermerkt werden.] 
+: ZuAusgangszustand
+     OldModus is Modus 
+     StartModul is AktivModul  Gruppen? 
+     if   StartGruppe is AktivGruppe  
+          Worte? if Startwort is Aktivwort then 
+     then  NeuZeigen  ; 
+
+Word: Search
+
+\ 4.011 Anpassungen an Modul- und Gruppentext. Suchen im Wortmodus (s.
+\ CommonCases ), aber Modus zurÅcksetzen, wenn nicht gefunden. 
+\ 4.021 Modus erst nach PopWord zurÅcksetzen.
+\ 4.087 Gefundene Worte merken. 
+: Search
+     true is Searching?  WipeForSearch  
+     Find$ put Search$  upcase Search$  Ausgangszustand     \ 4.083
+     doSearch
+     false is Searching?  gefunden? not 
+     if   " Sorry, word not found" Kurzmeldung         \ 4.025 4.045
+          ZuAusgangszustand                            \ 4.083
+     else Listenzeigen Wortmerken WortDisplay ShowText \ 4.011 4.087
+     then  ; 
+
+Word: FindFunc
+
+\ Spezialfunktionen von Editline fÅr Find&Replace-String. i ist
+\ Cursorposition im Eingabetext. 
+: FindFunc   ( i c -- i )
+     case
+     'PgUp of "blank drop 1 endof                      \ 4.131
+     'PgDn of Aktivwort ename$ "obj "put drop 1 endof 
+     drop endcase  ; 
+
+Word: GetFind
+
+: GetFind
+     true is Find?  make SpecialFunc FindFunc
+     ComFenster wipe  0 0 wxy ."     Find word:  " 
+     inverse edit Find$ normal
+     Ende? 0= 
+     if   0 1 Fensterhîhe 1- min wxy ."  Replace with:  " 
+          inverse edit Replace$ normal 
+     then
+     false is Find?  make SpecialFunc drop  .Comment  ; 
+
+Word: ?WipeModulGrp
+
+\ Bei Search in M,G-Modus die Namenzeile lîschen. 4.011 4.065 
+: ?WipeModulGrp
+     ModGrp? if x1 7 + y3 1+ xy 60 spaces then  ; 
+
+Word: DoFind
+
+\ [Gefunden? muss bereits hier false gesetzt werden, damit beim Abbruch
+\ in GetFind nicht der Editor gerufen wird]
+\ 4.011 In Wortmodus schalten beim Suchen 
+\ 4.045 Pushword, Bei Getfind-Abbruch sofort raus. 4.083 ohne Pushword. 
+: DoFind
+     false is gefunden?   
+     false is Ende? GetFind Ende? ?exit \ bei Abbruch wird Ende? true
+     ?WipeModulGrp                      \ 4.011
+     %Wort is Modus @Text               \ 4.011 4.045
+     0 is DefCur                        \ am Anfang von Wort beginnen
+     make SearchInWord SearchText       \ 4.131
+     Ende? not if Search then  ; 
+
+Word: Replace
+
+\ Cursor nicht verschieben. 4.131 
+: Replace
+     Find$ c@ DelInBuf
+     Replace$ count is CutLÑnge
+     CutBuf CutLÑnge move InsCut .Buffer  ; 
+
+Word: FindOn
+
+: FindOn
+     1 cur+  false is gefunden?  
+     SearchInWord  gefunden? if cur >cur then  ; 
+
+Word: AndBy
+
+\ Kehrt zum Ausgangswort zurÅck, wenn kein UserWort gefunden. 
+: AndBy
+     false is gefunden? NextWord 
+     make SearchInWord SearchWord       \ 4.131
+     Search 
+     gefunden? not if -Wort then  ;     \ 4.112 
+
+Word: UsedBy
+
+: UsedBy
+     false is Ende?  clear Find$  
+     AktivWort Find$ @name  
+     AndBy  ;                           \ 4.112 
+
+Group: QuickFind
+
+Word: QFind$
+
+\ Der Suchstring bei Quickfind. Wird in Search$ kopiert fÅr die Suche. 
+/Name Stringbuf QFind$ 
+
+Word: xyFind
+
+: xyFind
+     32 y5 xy  ; 
+
+Word: xyStatus
+
+: xyStatus
+     x1 2+ y5 xy  ; 
+
+Word: ClrStatus
+
+\ Compiler Statusmeldung lîschen. 
+: ClrStatus
+     >rahmen xyStatus 40 .-  ; 
+
+Word: EraseFind
+
+\ Unterbrechung im Rahmen besteht maximal aus 19 Zeichen plus 2 Spaces. 
+: EraseFind
+    >rahmen xyFind 21 .-  normal  ClrStatus  ; 
+
+Word: Show$Find
+
+\ Eingabe auf Rahmen, Rahmen wird bei Backspace nachgefÅhrt. 
+: Show$Find
+     xyFind >rahmen space print QFind$ space 1 .- normal ; 
+
+Word: QName?
+
+\ True, wenn Teilstring einem Namen entspricht. 
+Flag QName? 
+
+Word: InitFind
+
+\ [Aktuelles Wort nicht in History legen.] 
+: InitFind
+     true is Find? EraseFind " " put QFind$  Show$Find set QName?  ; 
+
+Word: StopFind
+
+\ Put word in history, aber nur wenn, wir im Wortmodus sind. Es ist
+\ mîglich, QFind in M oder G-Modus zu beginnen und sofort zu beenden
+\ (zweimal Space drÅcken), und dann ist Aktivwort eventuell nicht
+\ definiert. 
+: StopFind
+     Find? if false is Find? EraseFind Wort? if WortMerken then then  ; 
+
+Word: DoBsp
+
+: DoBsp
+     "len
+     if   "len 1- "adr c!  'bl "adr count + c!  Show$Find
+     else StopFind
+     then  ; 
+
+Word: Insert$Find
+
+\ [Die Begrenzung der Eingabe auf 'gÅltige_Zeichen+1' verwirrt wohl mehr
+\ als es hilft?? 51u] 
+: Insert$Find   ( c -- )
+     obj QFind$ is "obj  
+     case 
+     'bsp of doBsp endof
+     "adr "len QName? if 1+ then "feld min dup>r + c! r> "adr c! 
+     Show$Find endcase  ; 
+
+Word: TeilUngleich?
+
+\ Searhc$ enthÑlt den Suchstring, Vergleich max. Åber LÑnge von Search$ 
+: TeilUngleich?   ( eintrag -- f )
+     Name$ @name  upcase Name$ 
+     Search$ c@ Name$ c@ min Name$ c!
+     Name$ Search$ "<>  ; 
+
+Word: FindTeilwort
+
+: FindTeilwort   ( -- eintrag | 0 )
+     QFind$ put Search$  upcase Search$ 
+     AlfaAnker
+     begin     AlfaNachfolger dup 0= ?Exit 
+               dup TeilUngleich? 0=
+     until  ; 
+
+Word: ?QFind
+
+\ Sucht erstes Wort mit gegebenem String. String kann editiert werden.
+\ Abbrechen mit CR oder Esc. Ev. begrenzen auf Treffer+1 Zeichen. [Erst
+\ Wortmodus dann GoWort.] 
+: ?QFind   ( c -- )
+     dup 'bl = if drop InitFind exit then
+     Find?
+     if   Insert$find  QFind$ c@
+          if   FindTeilwort ?dup
+               if   set QName?  %Wort is Modus  GoWort  \ 4.021
+               else clear QName?        \ Begrenzung gut??
+               then 
+          then
+     else ?StackEingabe 
+     then  ; 
+
+Group: Wort&Name
+
+Word: GetWordName
+
+\ Name aus Definition holen und in Word$ legen. 
+: GetWordName   ( -- )
+     0  DefLÑnge 0
+     ?do 1+ DefBuf i + c@ 14 = ?leave loop
+     dup DefLÑnge = 
+     over DefBuf + c@ 33 < or          \ leerer Name?        4.217
+     if   drop  clear Word$                                 \ 4.211
+     else is >in DefLÑnge is #tib DefBuf is tib ParseWord   \ 4.211
+     then ; 
+
+Word: ?Name
+
+\ Gerufen nach einer TextÑnderung. Kontrolliert ob der Name geÑndert ist. 
+: ?Name                                                     \ 4.211 
+     Def? 0= ?exit
+     GetWordName 
+     Word$ AktivWort EName$ "= ?exit              \ Name unverÑndert
+     AktivWort InAlfa? if AktivWort AlfaAbketten then
+     Word$ AktivWort !Name  
+     Word$ c@                                     \ wenn Name ex. 
+     if AktivWort AlfaEinhÑngen sUpdate then      \ .. einhÑngen
+     Hash  Cur Wortezeigen Deffenster >Cur  
+     Find$ put Search$  ;                                   \ 4.232 
+
+Word: Kopie?
+
+Flag Kopie? 
+
+Word: WortBilden
+
+\ Ein neues Wort eintragen und initialisieren. 4.023 4.099 ohne changed? 
+: WortBilden
+     false is vor?  ,Eintrag dup KeineWorte?
+     if   Wortanker InsertEintrag1
+     else AktivWort InsertEintrag
+     then is AktivWort
+     AktivWort dup is AlfaNachfolger                 \ 'nicht in Alfa'
+     0 AktivWort Codefeld !s                         \ zca=0
+     TextEnde !TextZeiger sUpdate 2048 is TextLÅcke  \ s. TextZeiger
+     ; 
+
+Word: NeuesWort
+
+: NeuesWort
+     WortBilden WorteZeigen AktivWort is OldWort
+     Kopie? if ?Name else TextLîschen 0 is DefCur then      \ 4.214
+     DefFenster  
+     " New word " Log  ; 
+

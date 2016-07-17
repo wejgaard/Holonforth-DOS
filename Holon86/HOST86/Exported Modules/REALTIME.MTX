@@ -1,0 +1,450 @@
+Module: Realtime
+
+Group: Channels
+
+A channel is a simple but effective means for communication between
+tasks and also for the synchronisation of task actions.
+
+A channel connects two tasks. It uses the rendezvous principle: the
+first task that addresses the channel for sending or reading data waits
+for the partner task. However, we also provide a possibility to 'post'
+data without waiting for acceptance.
+
+Holon implements channels as objecttypes with the messages: send,
+waitfor and post. 
+
+Word: WakeTask
+
+\ Makes status active in the task waiting with chan. 
+: WakeTask   ( chan -- )
+     0 swap @ 2 !l  ; 
+
+Word: GoSleep
+
+\ Sets status of current/active task inactive. 
+: GoSleep  
+     -1 ss: 2 !l  ; 
+
+Word: CWait
+
+\ Waits for data at chan. If data are already available, wakes other
+\ task. 
+: CWait   ( chan -- data )
+     dup @
+     if   dup wakeTask        \ wake other task
+          0 over !            \ free channel
+     else goSleep             \ sleep
+          ss: over !          \ and tell partner
+          switch              \ task waits here until woken
+     then 2+ @  ;             \ read data 
+
+Word: CSend
+
+\ Sends data via chan and sleeps, unless other task is already waiting. 
+: CSend   ( data chan -- )
+     swap over 2+ !      \ store data in channel
+     dup @               \ task waiting?
+     if   dup wakeTask
+          0              \ free channel 
+     else goSleep
+          ss:            \ channel occupied by current task
+     then swap !
+     switch  ; 
+
+Word: CPost
+
+\ Sends data via chan without waiting for acceptance. 
+: CPost   ( data chan -- )
+     swap over 2+ ! dup @
+     if   wakeTask 0
+     else ss:
+     then swap ! 
+     switch  ; 
+
+Word: CCheck
+
+\ Checks channel chan for data, leaves data and true or only false. Data
+\ are valid if sending task is waiting/suspended. 
+: CCheck   ( chan -- n true | false )
+     dup @ 
+     if   cWait true                    \ data ok, get them
+     else drop false                    \ task running, no data
+     then  ; 
+
+Word: post
+
+\ Post message on channel to other task. 
+Message: post 
+
+Word: check
+
+\ Fetch data on channel, if available; don't wait. 
+Message: check 
+
+Word: Channel
+
+\ Creates a channel for communication and synchronisation between two
+\ tasks. The sending task waits until the message is received, the
+\ receiving task waits until the message is sent. 
+ObjectType: Channel   ( name / -- )
+      Data:  0 integer,  ( area )  0 integer,  ( data )
+   Methods: cWait cSend noop cPost cCheck 
+  Messages: get   put   adr  post  check 
+
+Group: Timing
+
+The timer mechanism uses the tick count of the BIOS and is thus limited
+to the resolution of the BIOS timer (55 msec).
+
+The delay count is stored as the status. On each timer interrupt the
+delay count is decremented. When the status becomes zero the task is
+activated. 
+
+Word: tClock
+
+\ Decreases the delay count (=status) of all tasks, which are not active
+\ (0) or sleeping (-1). 
+Code tClock
+     cli  push ax  push bx  push es  
+     mov ax, ss  mov es, ax        \ start in current task (ss:)
+     begin mov es, es: 0           \ next area
+          mov ax, es: 2            \ status
+          inc ax  cmp ax, # 1  u>  \ status <> -1 oder 0 ?
+          if  dec es: 2  then
+          mov ax, ss  mov bx, es  cmp ax, bx   0=
+     until
+     pop es  pop bx  pop ax  sti  iret 
+
+Word: Wait
+
+: Wait   ( n -- )
+     2 area!  ; 
+
+Word: DOSVec1C
+
+\ We store the original DOS timer vector here. 
+0. double DOSVec1C 
+
+Word: SaveDOSVec1C
+
+\ Saves the DOS timer vector. 
+: SaveDOSVec1C
+     $1C GetIntVec is DOSVec1C  ; 
+
+Word: ResetDOSVec1C
+
+\ Resets the DOS timer vector. 
+: ResetDOSVec1C
+     DOSVec1C $1C SetIntVec  ; 
+
+Word: StartTimer
+
+: StartTimer
+     DOSVec1C + 0=
+     if   SaveDOSVec1C
+          cs: ['] tClock $1C SetIntVec  
+     then  ; 
+
+Word: StopTimer
+
+: StopTimer
+     ResetDOSVec1C  0. is DOSVec1C  ; 
+
+Word: ms
+
+\ Delay the current task +n milliseconds, using an 18ms clock (!). 
+: ms   ( +n -- )
+     55 1000 */ wait  ; 
+
+Group: Uservariables
+
+User variables possess task private data, that is stored in the task
+area (user area in Forth). Every task has its own copy of data for a
+user variable. The next free offset in the task area is determined by
+the system when loading. You can obtain the actual offset with the
+message adr. User variables are built as object types. 
+
+Word: UserOffset
+
+\ Start offset of user data in task area. 
+14 nLabel UserOffset 
+
+Word: UserAddr
+
+\ Delivers address of data of user obj. 
+: UserAddr   ( obj -- seg off )
+     @ ss: swap  ; 
+
+Word: User@
+
+\ Fetches data n from user obj. 
+: User@   ( obj -- n )
+     userAddr @l  ; 
+
+Word: User!
+
+\ Stores n into user obj. 
+: User!   ( n obj -- )
+     userAddr !l  ; 
+
+Word: +User!
+
+\ Adds n zu user obj. 
+: +User!   ( n obj -- )
+     userAddr +!l  ; 
+
+Word: -1User!
+
+\ Sets user obj logically true. 
+: -1User!   ( obj -- )
+     userAddr true -rot !l  ; 
+
+Word: 0User!
+
+\ Clears user obj = sets it logical false. 
+: 0User!   ( obj -- )
+     userAddr false -rot !l  ; 
+
+Word: User
+
+\ Integer user variable. A user variable has task private data. Offsets
+\ 0..13 in the task area are used by the task switcher, offsets 14+ are
+\ given to the user variables in the sequence of their definiton. 
+ObjectType: User
+      Data: UserOffset @ integer, 2 UserOffset +!
+   Methods: user@ user! userAddr -1user! 0user! +user!  
+  Messages: get   is    adr      set     clear  add 
+
+Word: U
+
+\ A user variable of type integer. 
+User U 
+
+Group: TaskInfo
+
+Word: .TaskStates
+
+: .TaskStates
+     theBase hex  30 10 xy
+     ss: dup 
+     begin  dup . dup 2 @l -1 <> if ." active " else ." stopped " then
+            0 @l 2dup = 
+     until  2drop
+     is theBase  ; 
+
+Word: .user
+
+: .user
+     ss: dup >r
+     begin  dup 0 @l dup r@ = 
+     until  r>drop  ; 
+
+Group: CodeISR
+
+Here is an example of a code interrupt routine. We use the system timer
+interrupt $1C, and increment a counter at every timer tick. 
+
+Word: Counter
+
+\ This counter is incremented at each timer tick. 
+0 integer Counter 
+
+Word: InitISRTest
+
+: InitISRTest
+     SaveDOSVec1C decimal
+     Console  clear Counter 
+     cr cr .Time  ; 
+
+Word: DoISRTest
+
+\ Accumulates timer ticks for ten seconds, printing the number of ticks
+\ every second. Finally prints the time and number of ticks. Resets the
+\ DOS timer routine. 
+: DoISRTest
+     10 times 1sec Counter 5 .r loop
+     ResetDOSVec1C  3 spaces .Time  ; 
+
+Word: CodeISR
+
+\ The actual interrupt service routine. 
+Label CodeISR
+     inc word cs: adr Counter  
+     iret 
+
+Word: TestCodeISR
+
+\ Starts the test, points the timer vector to our ISR, performs the test
+\ and resets the timer vector. 6ag-1 
+: TestCodeISR
+     InitISRTest  cs: CodeISR $1C SetIntVec  DoISRTest  ; 
+
+Group: ColonISR
+
+An interrupt can also call a high level Forth word. This group creates
+the defining words for colon interrupt service routines. The example
+below demonstrates how high level Forth (colon) words are used. Do not
+call DOS services in the colon ISR. DOS services are not reentrant. Is
+you need a DOS service in response to the interrupt, better use an
+interrupt task (see Task-ISR ). The colon and task ISR words, and the
+examples habe been provided by T. Beierlein. 
+
+Word: doISR
+
+\ adr contains the start of the list code, relative to xseg. 
+Label doISR   ( adr -- )
+     push ax  push bx  push cx  push dx  
+     push si  push di  push es  push ds
+     mov ax, cs  mov ds, ax                  \ ds: = cs:
+     mov bx, sp  mov bx, ss: 16 [bx]         \ bx = adr
+     mov ax, >xseg  add ax, 0 [bx]           \ ax = xseg + list
+     mov es, ax  sub si, si                  \ start of list code
+     next 
+
+Word: ISR:
+
+\ Defines a colon word that is called by an interrupt. 
+Compiler: ISR:
+    Intp: SkipName CallCode, ListSeg , ] 88  ;
+    Comp: NoComp ;
+    Code: doISR 
+
+Word: ISRret
+
+\ Run code that ends a colon ISR. 
+Label ISRret
+     pop ds  pop es  pop di  pop si
+     pop dx  pop cx  pop bx  pop ax
+     add sp, # 2                        \ drop adr from call doISR
+     iret 
+
+Word: ;ISR
+
+\ Ends a colon interrupt word. 
+Compiler: ;ISR
+    Intp: NoIntp ;
+    Comp: 88 ?structure Code, postpone [ ;
+    Code: ISRret 
+
+Word: ColonISR
+
+\ Example of a high level interrupt service routine. 
+ISR: ColonISR
+     1 add Counter  ;ISR 
+
+Word: TestColonISR
+
+\ Performs the same action as TestCodeISR, but with a colon ISR. 6ag-1 
+: TestColonISR
+     InitISRTest  cs: ['] ColonISR $1C SetIntVec  DoISRTest  ; 
+
+Group: TaskISR
+
+Here we devote a task to an interrupt. The interrupt wakes the task,
+which performs the interrupt action after the interrupt has been
+serviced. Therefore it is safe to call a DOS service. However, the
+response time is marginally longer. 
+
+Word: TickTask
+
+\ The task that is dedicated to an interrupt. 
+Task TickTask 
+
+Word: TickRoutine
+
+\ The routine that is performed by the interrupt. 
+: TickRoutine
+     begin GoSleep switch 1 add Counter again  ; 
+
+Word: TaskISR
+
+\ Actual interrupt service routine, wakes the dedicated task. 
+Label TaskISR
+     push bx  mov bx, # TickTask
+     mov cs: bx, 4 [bx]                 \ get task segment
+     push es  mov es, bx
+     mov word es: 2 # 0                 \ activate task
+     pop es  pop bx  
+     iret 
+
+Word: TestTaskISR
+
+\ 6ag-1 
+: TestTaskISR
+     make TickTask TickRoutine  start TickTask
+     InitISRTest  cs: ['] TaskISR $1C SetIntVec  DoISRTest 
+     stop TickTask  ; 
+
+Group: SystemInterrupts
+
+There are some system interrupts that should be handled in a PC
+program: Division by zero, single step trap, and the critical error
+handler. We offer the following proven solutions. 
+
+Word: DivZero
+
+\ Called by the divide-overflow exception. Will retry the division upon
+\ return, therefore we produce a clean result = 0. 6ah-2 Label. 
+Label DivZero
+     sub ax, ax  sub dx, dx  mov bx, # 1   iret 
+
+Word: SetDivZero
+
+\ Installs the DivZero ISR. 
+: SetDivZero
+     cs: DivZero 0 SetIntVec  ; 
+
+Word: NoSingleStep
+
+\ Clears single step flag bit in flag register copy = third item on the
+\ stack, that is written into flag register by IRET. 
+Label NoSingleStep
+     xchg sp, bp  push ax  push bx  push cx  xchg sp, bp
+     pop ax  pop bx  pop cx  xor cx, cx  push cx  push bx  push ax
+     xchg sp, bp  pop cx  pop bx  pop ax  xchg sp, bp
+     iret 
+
+Word: SetSSTrap
+
+: SetSSTrap
+     cs: NoSingleStep 1 SetIntVec  ; 
+
+Word: ceh-AX
+
+\ Stores content of register AX after a DOS critical error. 
+0 integer ceh-AX 
+
+Word: ceh-DI
+
+\ Contains error information after a DOS critical error. 
+0 integer ceh-DI 
+
+Word: CEH
+
+\ Critical error handler. Stores the error information provided by AX and
+\ DI, and returns to DOS with 'Fail' message. 
+Label CEH
+     mov cs: adr ceh-AX ax word
+     mov cs: adr ceh-DI di word
+     mov al, # 3  iret 
+
+Word: SetCEH
+
+\ Installs new critical error handler. Replaces the DOS critical error
+\ handler and its "Abort, Retry, Fail?" Message. 
+: SetCEH
+     cs: CEH $24 SetIntVec  ; 
+
+Word: CtlC
+
+\ Control-C handler. Does nothing but prevent an immediate exit to DOS. 
+Label CtlC
+     iret 
+
+Word: SetCtlC
+
+\ Installs the CtlC-Handler, and disables the DOS Ctl+C action (immediate
+\ exit from program). 
+: SetCtlC
+     cs: CtlC $23 SetIntVec  ; 
+

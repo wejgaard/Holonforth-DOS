@@ -1,0 +1,1607 @@
+Module: Struktur
+
+Group: Strukturen
+
+Word: ProgStruktur
+
+\ Handle des Programm-Strukturfiles 
+0 integer ProgStruktur 
+
+Word: HelpStruktur
+
+\ Handle des Help-Strukturfiles 
+0 integer HelpStruktur 
+
+Word: StrukturFile
+
+\ Aktuelles STR-File Handle 
+: StrukturFile   ( -- h )
+     Help? if HelpStruktur else ProgStruktur then  ; 
+
+Word: ProgStrEnde
+
+0. double ProgStrEnde 
+
+Word: HelpStrEnde
+
+0. double HelpStrEnde 
+
+Word: sEnde
+
+\ sHere als 32bit Adresse 
+: sEnde   ( -- d )
+     Help? if HelpStrEnde else ProgStrEnde then  ; 
+
+Word: +sEnde
+
+: +sEnde   ( d -- )
+     Help? if add HelpStrEnde else add ProgStrEnde then  ; 
+
+Word: is_sEnde
+
+: is_sEnde   ( d -- )
+     Help? if is HelpStrEnde else is ProgStrEnde then  ; 
+
+Word: ProgSeg
+
+\ Segment der Programmstruktur 
+0 integer ProgSeg 
+
+Word: HelpSeg
+
+\ Segment der Helpstruktur 
+0 integer HelpSeg 
+
+Word: sSeg
+
+\ Struktursegment. Hier wird Strukturfile eingelesen 
+: sSeg   ( -- seg )
+     Help? if HelpSeg else ProgSeg then  ; 
+
+Word: StrukturLesen
+
+\ Struktur wird auch spÑter wieder eingelesen, daher Filezeiger an den
+\ Anfang setzen. 
+: StrukturLesen    
+     Strukturfile FileReset  0. is_sEnde
+     sSeg 0
+     begin     2dup $8000 Strukturfile read
+               dup 0 +sEnde  $8000 =
+     while     $800 +2nd
+     repeat 2drop  ; 
+
+Word: dDummy
+
+0. double dDummy 
+
+Word: StrukturSpeichern
+
+\ Struktur auf das File schreiben. 
+: StrukturSpeichern
+     Strukturfile FileReset  sEnde is dDummy
+     sSeg 0
+     begin     2dup dDummy $8000 0 dmin drop Strukturfile write
+               $8000 =
+     while     dDummy $8000 0 d- is dDummy
+               $800 +2nd
+     repeat 2drop  ; 
+
+Word: /Eintrag
+
+\ Anzahl Bytes per Eintrag. 65e 
+40 constant /Eintrag 
+
+Word: MaxProgEintrag
+
+\ Maximale Anzahl ProgrammEintrÑge in Struktur. 4.157 Unlimitiert in
+\ Demo. 
+: MaxProgEintrag
+     4000  ; 
+
+Word: MaxHelpEintrag
+
+\ Manual hat 32K zur VerfÅgung. 65e. 
+819 constant MaxHelpEintrag 
+
+Word: OpenProgStruktur
+
+\ Struktursegment allozieren fÅr MaxProgEintrag EintrÑge, Strukturfile
+\ îffnen und Struktur einlesen. 
+: OpenProgStruktur
+     clear Help?  
+     MaxProgEintrag /Eintrag 16 */ 2 + malloc 
+     if is ProgSeg else " Out of memory" EndMeldung then
+     Struktur$ open-r/w is ProgStruktur  StrukturLesen  ; 
+
+Word: OpenHelpStruktur
+
+\ Eine Struktur von MaxHelpEintrag EintrÑgen îffnen fÅr die HelpInfo. 
+: OpenHelpStruktur
+     HelpStruktur$ FileEx? 0= if set NoHelp? exit then
+     set Help?  
+     MaxHelpEintrag /Eintrag 16 */ 1+ malloc   
+     if is HelpSeg else " Out of memory" Endmeldung then
+     HelpStruktur$ open-r/w is HelpStruktur  Strukturlesen 
+     clear Help?  ; 
+
+Word: OpenStructure
+
+: OpenStructure
+     OpenProgStruktur OpenHelpStruktur  ; 
+
+Word: UpdateStructure
+
+\ Strukturfile nach Aenderungen auffrischen 
+: UpdateStructure
+     StrukturSpeichern Strukturfile duph close drop   ; 
+
+Word: CloseProgStruktur
+
+\ [Einzeln gerufen in ?NeuesProgramm] 
+: CloseProgStruktur
+     StrukturSpeichern  
+     ProgStruktur close drop  clear ProgStruktur            \ 4.224
+     ProgSeg mfree drop  ; 
+
+Word: CloseHelpStruktur
+
+: CloseHelpStruktur
+     HelpStruktur close drop  clear HelpStruktur            \ 4.224
+     HelpSeg mfree drop  ; 
+
+Word: CloseStructure
+
+\ Strukturfile(s) schliessen und Struktursegment(e) freigeben 
+: CloseStructure
+     CloseProgStruktur  NoHelp? 0= if CloseHelpStruktur then  ; 
+
+Word: AnzahlEintrÑge
+
+\ Die Gesamtzahl EintrÑge in der ProgrammStruktur. 4.085 
+: AnzahlEintrÑge
+     ProgStrEnde /Eintrag um/  ; 
+
+Group: Struktur
+
+Word: sAdr
+
+\ Struktur Version3 
+: sAdr   ( item off -- seg off )
+     >r dup 2* sSeg + swap 8 * r> +  ;  \ 40/item 
+
+Word: !s
+
+\ n bei Offset adr in Strukturfile ablegen 
+: !s   ( n item off -- )
+     sAdr !l  ; 
+
+Word: @s
+
+\ n bei Offset adr in Strukturfile auslesen 
+: @s   ( item off -- n )
+     sAdr @l  ; 
+
+Word: c@s
+
+\ Byte bei Offset sadr in Strukturfile auslesen 
+: c@s   ( item off -- c )
+     sAdr c@l  ; 
+
+Word: d!s
+
+: d!s   ( d item off -- )
+     2>r 2r@ !s 2r> 2+ !s  ; 
+
+Word: d@s
+
+: d@s   ( item off -- d )
+     2dup 2+ @s -rot @s  ; 
+
+Word: sHere
+
+\ sHere zerlegt in item und Offset innerhalb item. Items werden von 1 aus
+\ gezÑhlt. Jedes Item belegt 40 Bytes 
+: sHere   ( -- item off )
+     sEnde /Eintrag um/mod swap  ; 
+
+Word: sHereItem
+
+: sHereItem   ( -- item )
+     sHere drop  ; 
+
+Word: sHereOff
+
+: sHereOff   ( -- off )
+     sHere nip  ; 
+
+Word: ,s
+
+\ n am Ende der Struktur ablegen 
+: ,s   ( n -- )
+     shere !s  2. +sEnde  ; 
+
+Word: sAllot
+
+\ n Null-Bytes am Fileende zufÅgen, n muss gerade sein 
+: sAllot   ( n -- )
+     2/ 0 do 0 ,s loop  ; 
+
+Word: sUp?
+
+\ true wenn Struktur geÑndert wurde und auf File geschrieben werden soll 
+0 integer sUp? 
+
+Word: sUpdate
+
+: sUpdate
+     true is sUp?  SetUpdateMarke  ; 
+
+Group: Name
+
+Word: Name
+
+\ Offset des Namens von eintrag 
+: Name   ( eintrag -- sadr )
+     20  ; 
+
+Word: EName
+
+\ Strukturadresse des Namens von eintrag 
+: EName   ( eintrag -- seg off )
+     name sadr  ; 
+
+Word: name!
+
+\ String bei seg1:off1 in seg2:off2 legen, nur auf Namen anwenden. 
+\ [FÅr Strings steht put zur VerfÅgung] 69m-1 Aliasbit abschneiden. 
+: name!   ( seg1 off1 seg2 off2 -- )
+     2>r countl $7F and /name min  dup 2r@ c!l  2r> 1+ rot movel  ; 
+
+Word: !Name
+
+\ String "adr als Name von eintrag in Struktur schreiben. 
+: !Name   ( "adr eintrag -- )
+      cs: -rot EName name!  ; 
+
+Word: @Name
+
+\ Holt Name von eintrag zu $adr. 
+: @Name   ( eintrag "adr -- )
+     >r EName cs: r> name!  ; 
+
+Word: EName$
+
+\ Legt Name von Eintrag in Name$ und liefert adr von Name$. 
+: EName$   ( eintrag -- "adr )
+     Name$ @Name Name$  ; 
+
+Word: .EName
+
+\ 69m-1 Count begrenzen wegen Aliasmarke. 
+: .EName   ( eintrag -- )
+     EName countl $7F and typel  ; 
+
+Word: EMeldung
+
+\ Meist wird Meldung fortgesetzt (Bsp. DeleteModul) 
+: EMeldung   ( eintrag "adr -- )
+     Meldung .eName space  ; 
+
+Word: AktivZeile
+
+\ Zeile mit aktivem Eintrag, relativ zu Fensteranfang 
+0 integer AktivZeile 
+
+Word: EditEintrag
+
+\ Editiert Name von eintrag 
+: EditEintrag   ( eintrag -- )
+     clear Name$  dup Name$ @Name >inverse AktivZeile .Line
+     1 Aktivzeile wxy  edit Name$ normal  Name$ swap !name  ; 
+
+Word: SetAlias
+
+\ Aliasmarke (Bit7) in Namecount setzen (s. Alias: ) 69m-1 
+: SetAlias   ( eintrag -- )
+     dup EName c@l $80 or swap EName c!l  ; 
+
+Word: ClrAlias
+
+\ Aliasmarke (Bit7) in Namecount loeschen (s. Changed ). 69m-1 
+: ClrAlias   ( eintrag -- )
+     dup EName c@l $7F and swap EName c!l  ; 
+
+Word: Alias?
+
+\ Ist Wort ein Alias? 69m-1 
+: Alias?   ( eintrag -- f )
+     EName c@l $7F >  ; 
+
+Group: Anker
+
+Der nullte Eintrag in der Struktur ist der Anker fÅr die Listen:
+
+› 3356 › alfa › last › first › active › mods › groups › words › 0 0
+= "V3"   list   ---- Modulliste -----   --- DeleteListen ---- 
+
+Word: ModulAnker
+
+\ Item 0 im Strukturfile. Die ModuleintrÑge haben den Anker vorgegeben
+\ in der Struktur (Uranker), Gruppen- und WorteintrÑge haben ihren Anker
+\ im Åbergeordneten Modul- resp. Gruppeneintrag. 
+0 constant ModulAnker 
+
+Word: AlfaAnker
+
+\ Anfangsparagraph der Alfaliste (alphabetische Wortliste), Alfaliste
+\ bei Offset 2. 
+0 constant AlfaAnker 
+
+Word: sInt@
+
+\ Aus Strukturfile Wert n lesen bei Adresse, die bei obj liegt 
+: sInt@   ( obj -- n )
+     @ 0 swap @s  ; 
+
+Word: sInt!
+
+: sInt!   ( n obj -- )
+     @ 0 swap !s  ; 
+
+Word: StrukturInt
+
+\ Integer mit Datum in Strukturfile bei Offset adr 
+ObjectType: StrukturInt
+      Data: integer,  ( offset -- )
+   Methods: sInt@  sInt!  
+  Messages: get    is 
+
+Word: EndeModule
+
+\ Modulzeiger in UrEintrag=Modulanker
+\ ../lastmodul/firstmodul/aktivmodul/.. 
+4 StrukturInt EndeModule 
+
+Word: AnfangModule
+
+6 StrukturInt AnfangModule 
+
+Word: AktivModul
+
+8 StrukturInt AktivModul 
+
+Word: AlteModule
+
+\ Listen gelîschter Module, Gruppen und Worte 
+10 StrukturInt AlteModule 
+
+Word: AlteGruppen
+
+12 StrukturInt AlteGruppen 
+
+Word: AlteWorte
+
+14 StrukturInt AlteWorte 
+
+Word: NeueStruktur
+
+\ Strukturfile initialisieren, erster Eintrag (0) enthÑlt Systemzeiger. 
+: NeueStruktur
+     0. is_sEnde  /Eintrag sAllot         \ Fileende = 40
+     Modulanker is AnfangModule
+     Modulanker is EndeModule
+     Modulanker is AktivModul
+     0 is AlteModule  0 is AlteGruppen  0 is AlteWorte
+     $3356 0 0 !s                       \ Version 30
+     " StrukturAnker" 0 !Name
+     ; 
+
+Group: Vor&Nach
+
+Word: adrVor
+
+\ Die Adresse vom Vorfeld liefern 
+: adrVor   ( eintrag obj -- eintrag )
+     drop 0  ; 
+
+Word: @Vor
+
+\ Den Voreintrag aus dem VorgÑngerfeld lesen 
+: @Vor   ( eintrag obj -- voreintrag )
+     adrVor @s  ; 
+
+Word: !Vor
+
+: !Vor   ( voreintrag eintrag obj -- )
+     adrVor !s  ; 
+
+Word: VorType
+
+\ Objekttyp fÅr VorgÑnger bilden, leider nur fÅr ein Objekt benutzt 
+ObjectType: VorType
+      Data:
+   Methods: @Vor  !Vor  adrVor  
+  Messages: get   is    adr 
+
+Word: VorgÑnger
+
+VorType VorgÑnger 
+
+Word: adrNach
+
+\ Die Adresse vom Nachfeld liefern 
+: adrNach   ( eintrag obj -- eintrag )
+     drop  2  ; 
+
+Word: @Nach
+
+\ Den Nacheintrag aus dem Nachfolgerfeld lesen 
+: @Nach   ( eintrag obj -- nacheintrag )
+     adrNach @s  ; 
+
+Word: !Nach
+
+: !Nach   ( nacheintrag eintrag obj -- )
+     adrNach !s  ; 
+
+Word: NachType
+
+\ Objekttyp fÅr Nachfolger bilden, leider nur fÅr ein Objekt benutzt 
+ObjectType: NachType
+      Data:
+   Methods: @Nach !Nach adrNach 
+  Messages: get   is    adr 
+
+Word: Nachfolger
+
+NachType Nachfolger 
+
+Group: EintrÑge
+
+Word: ?PlatzInStruktur
+
+\ Testet, ob noch Platz besteht fÅr einen Eintrag in der Struktur
+\ (Programm oder Manual). 4.145 4.157 Demo unbegrenzt. 
+: ?PlatzInStruktur
+     Help? 
+     if   MaxHelpEintrag HelpStrEnde
+     else MaxProgEintrag ProgStrEnde
+     then ( nmax d-adr -- ) /Eintrag um/  ( nmax n -- ) > 0=
+     if   " Sorry, structure is full -- consult manual" Endmeldung 
+     then ; 
+
+Word: ,Eintrag
+
+\ Bildet neuen Eintrag am Strukturende, setzt alle Zeiger auf sich
+\ selbst. Reserviert Bereich fÅr Name und weitere Zeiger.
+\ 65e Kontrolliert Platz. 
+: ,Eintrag   ( -- neuerEintrag )
+     ?PlatzInStruktur
+     sHereItem
+     dup ,s                             \ VorgÑnger
+     dup ,s                             \ Nachfolger
+     dup ,s                             \ last 
+     dup ,s                             \ first 
+     dup ,s                             \ aktiv 
+     30 sAllot  ;                       \ Rest des Eintrags 
+
+Word: Last
+
+\ Liefert letzten eintrag von anker 
+: Last   ( anker -- eintrag )
+     4 @s  ; 
+
+Word: !last
+
+: !last   ( eintrag anker -- )
+     4 !s  ; 
+
+Word: First
+
+\ Erster eintrag von anker 
+: First   ( anker -- eintreg )
+     6 @s  ; 
+
+Word: !first
+
+: !first   ( item anker -- )
+     6 !s  ; 
+
+Word: doAll
+
+\ Allgemeine Funktion, fÅhrt xt aus fÅr alle EintrÑge von anker. 
+: doAll   ( anker xt -- )
+     >r dup first
+     begin 2dup <> while dup r@ execute Nachfolger repeat
+     2drop r>drop  ; 
+
+Word: doAll:
+
+\ Compiliert doAll mit der gewÅnschen action. [TheCode vor ' holen, da
+\ nachher Compwort umgesetzt ist.]  65v Literal immediate b32-4 
+Compiler: doAll:   ( action / -- )
+    Intp: NoIntp  ;
+    comp: TheCode ' postpone literal compile,  ;
+    code: doAll 
+
+Group: Module
+
+Word: ModulEintrÑge
+
+Text: ModulEintrÑge
+  ModuleintrÑge haben die Form:
+/Vor/Nach/lastgruppe/firstgruppe/aktivgruppe/reserve /$name/ 
+
+Word: Module?
+
+: Module?   ( -- f )
+     AktivModul ModulAnker <>  ; 
+
+Word: KeineModule?
+
+: KeineModule?   ( -- f )
+     Module? not  ; 
+
+Word: ErstesModul?
+
+: ErstesModul?   ( -- f )
+     AktivModul VorgÑnger Modulanker =  ; 
+
+Word: LetztesModul?
+
+: LetztesModul?   ( -- f )
+     AktivModul Nachfolger Modulanker =  ; 
+
+Word: ErstesModul
+
+: ErstesModul
+     Modulanker first is AktivModul  ; 
+
+Word: LetztesModul
+
+: LetztesModul
+     Modulanker last is AktivModul  ; 
+
+Word: VorigesModul
+
+: VorigesModul
+     AktivModul VorgÑnger is AktivModul  ; 
+
+Word: NÑchstesModul
+
+: NÑchstesModul
+     AktivModul Nachfolger is AktivModul  ; 
+
+Group: Gruppen
+
+Word: adrGruppe
+
+\ Die Strukturadresse der aktiven Gruppe im aktiven Modul 
+: adrGruppe   ( obj -- sadr )
+     drop AktivModul 8  ; 
+
+Word: @Gruppe
+
+\ Liefert aktive Gruppe 
+: @Gruppe   ( obj -- eintrag )
+     adrGruppe @s  ; 
+
+Word: !Gruppe
+
+\ Speichert aktive Gruppe 
+: !Gruppe   ( eintrag obj -- )
+     adrGruppe !s  ; 
+
+Word: Gruppentyp
+
+ObjectType: Gruppentyp
+      Data:
+   Methods: @Gruppe !Gruppe adrGruppe  
+  Messages: get     is      adr 
+
+Word: AktivGruppe
+
+\ Gruppeneintrag:
+\ /Vorgruppe/Nachgruppe/lastword/firstword/aktivwort/reserve/$name/ 
+GruppenTyp AktivGruppe 
+
+Word: Gruppenanker
+
+\ Der Gruppenanker sitzt im zugehîrigen Moduleintrag 
+: Gruppenanker   ( -- item )
+     AktivModul  ; 
+
+Word: Gruppen?
+
+\ Existieren Gruppen im aktiven Modul? 
+: Gruppen?   ( -- f )
+     AktivGruppe AktivModul <>  ; 
+
+Word: KeineGruppen?
+
+: KeineGruppen?   ( -- f )
+     Gruppen? not  ; 
+
+Word: ErsteGruppe
+
+\ Erste Gruppe aktiv machen 
+: ErsteGruppe  
+     Gruppenanker first is AktivGruppe  ; 
+
+Word: LetzteGruppe
+
+\ Letzte Gruppe wÑhlen 
+: LetzteGruppe  
+     Gruppenanker last is AktivGruppe  ; 
+
+Word: ErsteGruppe?
+
+\ Abschlussbedingung, daher auch Fall KeineGruppen? eingeschlossen. 
+: ErsteGruppe?   ( -- f )
+     AktivGruppe VorgÑnger Gruppenanker =  KeineGruppen? or  ; 
+
+Word: LetzteGruppe?
+
+: LetzteGruppe?   ( -- f )
+     AktivGruppe Nachfolger Gruppenanker =  KeineGruppen? or  ; 
+
+Word: VorigeGruppe
+
+: VorigeGruppe
+     AktivGruppe VorgÑnger is AktivGruppe  ; 
+
+Word: NÑchsteGruppe
+
+: NÑchsteGruppe
+     AktivGruppe Nachfolger is AktivGruppe  ; 
+
+Group: Wortfelder
+
+ 
+
+Word: WortEintrÑge
+
+Text: WortEintrÑge
+ /VorgÑnger/Nachfolger/alfa/text/dcode/run/comp/flags/class/$name/
+  alfa = Link zu vorigem Wort in Alfaliste
+  text = Zeiger auf Wortrecord im Textfile (Page)
+  dcode = enthÑlt zca oder Datum (32 bit)
+  intp = xt von Intpcode
+  comp = xt von Compcode
+  flags: bit0..9=zCodelÑnge, bit10..14=xCodelÑnge, bit15=geladen?
+  class = Zeigt auf Klassendefinition
+Der Eintrag wirkt als Actor, je nach State wird Intp- oder Compcode
+ausgefÅhrt. 
+
+Word: Textfeld
+
+\ Offsets im Eintrag 
+6 constant Textfeld 
+
+Word: Codefeld
+
+\ Offsets im Eintrag. Platz fÅr 32 Bit Adresse 
+8 constant Codefeld 
+
+Word: IntpFeld
+
+12 constant IntpFeld 
+
+Word: Compfeld
+
+14 constant Compfeld 
+
+Word: Flagfeld
+
+16 constant Flagfeld 
+
+Word: ClassFeld
+
+\ Zeigt in Datentypen auf die Klassendefinition (Datenworte und Tabelle
+\ der Methoden und Meldunen). 
+18 constant ClassFeld 
+
+Word: ClrLadeflag
+
+: ClrLadeflag   ( eintrag -- )
+     dup Flagfeld @s $7FFF and swap Flagfeld !s  ; 
+
+Word: SetLadeflag
+
+: SetLadeflag   ( eintrag -- )
+     dup Flagfeld @s $8000 or swap Flagfeld !s  ; 
+
+Word: Geladen?
+
+: Geladen?   ( eintrag -- f )
+     Flagfeld @s 0<  ; 
+
+Word: @CodelÑnge
+
+: @CodelÑnge   ( eintrag -- n )
+     Flagfeld @s $3FF and  ; 
+
+Word: !CodelÑnge
+
+\ CodelÑnge u < 1024 in Flagfeld schreiben (Bits 0..9). LÑnge begrenzen
+\ in Laderoutine (zBytes<1024). 
+: !CodelÑnge   ( u eintrag -- )
+     dup>r Flagfeld @s $FC00 and or r> Flagfeld !s  ; 
+
+Group: Worte
+
+Word: adrWort
+
+\ Die Strukturadresse des aktiven Worts in der aktiven Gruppe 
+: adrWort   ( obj -- sadr )
+     drop AktivGruppe 8  ; 
+
+Word: Wort@
+
+\ Liefert aktives Wort 
+: Wort@   ( obj -- eintrag )
+     adrWort @s  ; 
+
+Word: Wort!
+
+\ Speichert aktives Wort 
+: Wort!   ( eintrag obj -- )
+     adrWort !s  ; 
+
+Word: Worttyp
+
+ObjectType: Worttyp
+      Data:
+   Methods: Wort@ Wort! adrWort  
+  Messages: get   is    adr 
+
+Word: AktivWort
+
+WortTyp AktivWort 
+
+Word: WortAnker
+
+: WortAnker   ( -- item )
+     AktivGruppe  ; 
+
+Word: ErstesWort
+
+: ErstesWort
+     Gruppen? if WortAnker first is AktivWort then  ; 
+
+Word: LetztesWort
+
+: LetztesWort
+     Gruppen? if Wortanker last is AktivWort then  ; 
+
+Word: Worte?
+
+: Worte?   ( -- f )
+     AktivWort AktivGruppe <> Gruppen? and  ; 
+
+Word: KeineWorte?
+
+: KeineWorte?   ( -- f )
+     Worte? not  ; 
+
+Word: ErstesWort?
+
+: ErstesWort?   ( -- f )
+     AktivWort VorgÑnger Wortanker =  KeineWorte? or  ; 
+
+Word: LetztesWort?
+
+: LetztesWort?   ( -- f )
+     AktivWort Nachfolger Wortanker =  KeineWorte? or  ; 
+
+Word: VorigesWort
+
+: VorigesWort
+     AktivWort VorgÑnger is AktivWort  ; 
+
+Word: NÑchstesWort
+
+: NÑchstesWort
+     AktivWort Nachfolger is AktivWort  ; 
+
+Group: Verschieben
+
+Word: OldWort
+
+0 integer OldWort 
+
+Word: -Modul
+
+: -Modul
+     ErstesModul? 0= if VorigesModul then  ; 
+
+Word: +Modul
+
+: +Modul
+     LetztesModul? not if NÑchstesModul then  ; 
+
+Word: -GModul
+
+\ Geht zurÅck zum nÑchsten Modul, das Gruppen enthÑlt. Ende? markieren
+\ fÅr -WGruppe . 
+: -GModul
+     AktivModul
+     begin ErstesModul? 0=
+     while VorigesModul Gruppen? if LetzteGruppe drop exit then
+     repeat is AktivModul set Ende?  ;                      \ 4.215 
+
+Word: +GModul
+
+\ Geht zu nÑchstem Modul, das Gruppen besitzt. Wenn kein weiteres Modul
+\ Gruppen hat, wird AktivModul nicht geÑndert (resp. zurÅckgesetzt), aber
+\ Ende? wird gesetzt (fÅr +WGruppe). 
+: +GModul
+     AktivModul
+     begin LetztesModul? 0=                                      
+     while NÑchstesModul Gruppen? if ErsteGruppe drop exit then
+     repeat is AktivModul set Ende?  ;                      \ 4.215 
+
+Word: -Gruppe
+
+: -Gruppe
+     ErsteGruppe?
+     if   -GModul
+     else VorigeGruppe 
+     then  ; 
+
+Word: +Gruppe
+
+: +Gruppe
+     LetzteGruppe?
+     if   +GModul
+     else NÑchsteGruppe 
+     then 0 is OldWort  ; 
+
+Word: -WGruppe
+
+\ Geht zurÅck zur nÑchsten Gruppe, die Worte enthÑlt.
+\ 74k Korrektur. 4.015 
+: -WGruppe
+     clear Ende? AktivGruppe AktivModul 
+     begin ErstesModul? ErsteGruppe? and Ende? or 0=        \ 4.215
+     while -Gruppe over AktivGruppe <> Worte? and
+           if LetztesWort 2drop exit then                   \ 4.215
+     repeat is AktivModul is AktivGruppe  ; 
+
+Word: +WGruppe
+
+\ Geht zur nÑchsten Gruppe (und Modul), das Worte besitzt. Wenn es keine
+\ solche Gruppe gibt, bleiben wir in Gruppe und Modul.
+\ Bug 4.215: 'then' falscher Ort 
+: +WGruppe
+     clear Ende? AktivGruppe AktivModul 
+     begin LetztesModul? LetzteGruppe? and Ende? or 0=      \ 4.215
+     while +Gruppe over AktivGruppe <>       \ wenn neue Gruppe
+           Worte? and                        \ und Worte vorhanden     
+           if ErstesWort 2drop exit then     \ zu erstem Wort  4.215
+     repeat is AktivModul is AktivGruppe  ; 
+
+Word: -Wort
+
+\ [OldWort nullen bei neuer Gruppe, denn wenn Gruppe leer ist, bleibt
+\ Oldwort gleich altem Wort und bei anschliessendem -Wort wird das Wort
+\ nicht gezeigt.] 
+: -Wort
+     ErstesWort?
+     if   -WGruppe  0 is OldWort
+     else  VorigesWort
+     then  ; 
+
+Word: +Wort
+
+: +Wort
+     LetztesWort?
+     if   +WGruppe  0 is OldWort
+     else  NÑchstesWort
+     then  ; 
+
+Word: HomeWord
+
+: HomeWord
+     ErstesWort? if -WGruppe else ErstesWort then  ;        \ 4.215 
+
+Word: EndWord
+
+: EndWord
+     LetztesWort? if +WGruppe else LetztesWort then  ;      \ 4.215 
+
+Word: PgupWord
+
+\ Immer max. 4 Worte zurÅck. 
+: PgupWord
+     ErstesWort? 
+     if   -WGruppe                                          \ 4.215
+     else Wortfenster 4 0 do -Wort ErstesWort? ?leave loop 
+     then  ; 
+
+Word: PgdnWord
+
+\ Immer max. 4 Worte weiter, auch bei Macro. 
+: PgdnWord
+     LetztesWort? 
+     if   +WGruppe                                          \ 4.215
+     else Wortfenster 4 0 do +Wort LetztesWort? ?leave loop 
+     then  ; 
+
+Word: ProgrammAnfang
+
+: ProgrammAnfang
+     ErstesModul Gruppen?
+     if ErsteGruppe ErstesWort else %Modul is Modus then  ; 
+
+Word: ProgrammEnde
+
+: ProgrammEnde
+     LetztesModul Gruppen?
+     if LetzteGruppe LetztesWort else %Modul is Modus then  ; 
+
+Word: FindGruppe
+
+\ Oberitem zeichnet sich dadurch aus, dass der VorgÑnger nicht auf das
+\ vorhergehende Unteritem zeigt. 
+: FindGruppe   ( item -- oberitem )
+     begin dup Nachfolger dup VorgÑnger rot <> until  ; 
+
+Word: FindModul
+
+: FindModul   ( gruppe -- modul )
+     FindGruppe  ; 
+
+Group: Alfaliste
+
+Word: Search$
+
+\ Der String nach dem gesucht wird, gesetzt von Find$, QFind$ oder dem
+\ Namen eines Eintrags. !Wenn Name bei Find&Replace geÑndert wird, wird 
+\ Search$ geÑndert wegen dem Einbinden in die Alfaliste; zurÅcksetzen auf
+\ FindÑ. 
+/Name Stringbuf Search$ 
+
+Word: NamenUngleich?
+
+: NamenUngleich?   ( eintrag1 eintrag2 -- -1|0|1 )
+     Search$ @name  upcase Search$ 
+     Name$ @name  upcase Name$ 
+     Name$ Search$ "<>  ; 
+
+Word: NameKleiner?
+
+: NameKleiner?   ( eintrag1 eintrag2 -- f )
+     NamenUngleich? 0<  ; 
+
+Word: adrAlfa
+
+\ Die Adresse vom Alfafeld liefern ( item off ), in eintrag=0 (Uranker)
+\ ist das Alfafeld bei Offset 2. 
+: adrAlfa   ( eintrag obj -- item off )
+     drop  dup if 4 else 2 then  ; 
+
+Word: @Alfa
+
+\ Den Nacheintrag aus dem Nachfolgerfeld lesen 
+: @Alfa   ( eintrag obj -- nacheintrag )
+     adrAlfa @s  ; 
+
+Word: !Alfa
+
+: !Alfa   ( nacheintrag eintrag obj -- )
+     adrAlfa !s  ; 
+
+Word: AlfaType
+
+\ Objekttyp fÅr Nachfolger bilden, leider nur fÅr ein Objekt benutzt 
+ObjectType: AlfaType
+      Data:
+   Methods: @Alfa  !Alfa  adrAlfa  
+  Messages: get    is     adr 
+
+Word: AlfaNachfolger
+
+\ Die Alfaliste hat nur Nachfolger. 
+AlfaType AlfaNachfolger 
+
+Word: AlfaVorgÑnger
+
+\ Den AlfaVorgÑnger bestimmen mit Durch-die-Liste-laufen 
+: AlfaVorgÑnger   ( eintrag -- eintrag )
+     >r AlfaAnker
+     begin     dup AlfaNachfolger r@ <>
+     while     AlfaNachfolger
+     repeat  r>drop  ; 
+
+Word: AnzahlWorte
+
+: AnzahlWorte   ( -- n )
+     0 AlfaAnker
+     begin     AlfaNachfolger ?dup
+     while     1 +2nd
+     repeat  ; 
+
+Word: PlatzSuchen
+
+\ Liefert VorgÑngereintrag in Alfaliste 
+: PlatzSuchen   ( eintrag1 -- eintrag2 )
+     >r AlfaAnker
+     begin     dup AlfaNachfolger 0= if r>drop exit then
+               dup AlfaNachfolger r@ NameKleiner?
+     while     AlfaNachfolger
+     repeat  r>drop  ; 
+
+Word: InAlfa?
+
+\ Wenn das Wort nicht in der Liste ist, ist es sein eigener Nachfolger. 
+: InAlfa?   ( eintrag -- f )
+     dup AlfaNachfolger <>  ; 
+
+Word: AlfaEinhÑngen
+
+: AlfaEinhÑngen   ( eintrag -- )
+     dup inAlfa? if drop exit then 
+     dup Platzsuchen
+     2dup AlfaNachfolger  2dup NamenUngleich? 
+     if   swap is AlfaNachfolger is AlfaNachfolger
+     else 2drop 2drop
+     then  ; 
+
+Group: Logfile
+
+Word: Loggen
+
+Text: Loggen
+  Das Logfile zeichnet VerÑnderungen am Quelltext auf, also 
+Aenderungen an der Struktur und am Text. Loggen ist eng mit der
+Struktur verbunden, daher wird es hier definiert. 
+
+Word: Logfile
+
+\ Handle von .LOG-File 
+0 integer Logfile 
+
+Word: OpenLog
+
+\ Oeffnet oder bildet das Logfile und setzt Filezeiger an das Ende.
+\ Logfile wird nur in Profivariante gefÅhrt. 
+: OpenLog
+     Profi? 0= ?exit
+     Logfile$ open-r/w ?dup 0= if Logfile$ mkfile then is Logfile
+     Logfile Filelength 2drop  ; 
+
+Word: UpdateLog
+
+: UpdateLog
+     Profi? if Logfile duph close drop then  ; 
+
+Word: CloseLog
+
+: CloseLog
+     Profi? if Logfile close drop  clear Logfile then  ;    \ 4.224 
+
+Word: lUp?
+
+\ Updateflag fÅr Logfile. 
+0 integer lUp? 
+
+Word: logCR
+
+: logCR
+     $0D Logfile c!h  $0A Logfile c!h  ; 
+
+Word: LogSP
+
+\ i Leerzeichen in Logzeile. 
+: LogSP   ( i -- )
+     0 ?do 'bl Logfile c!h loop  ; 
+
+Word: Log$
+
+\ Wird an vielen Orten im Programm benutzt. 
+: Log$   ( "adr -- )
+     Profi? if cs: swap countl Logfile write drop else drop then  ; 
+
+Word: LogModus
+
+\ KÅrzel fÅr die Art des Eintrags drucken. 
+: LogModus   ( -- eintrag )
+     Modus case
+     %Modul  of AktivModul  " M  " endof
+     %Gruppe of AktivGruppe " G  " endof
+     %Wort   of AktivWort   " W  " endof
+     %Edit   of AktivWort   " W  " endof
+     %Ende   of AktivModul  " M  " endof
+     drop       AktivWort   " ?  " endcase
+     Log$  ; 
+
+Word: Logline
+
+\ Logzeile schreiben, Updateflag setzen. 4.049 ohne try logModus. 
+: Logline    ( "adr -- )
+     logCR  "date log$  1 logSP
+     "time 5 over c! log$               \ nur hh:mm zeigen
+     1 logSP logModus EName$ log$  2 LogSP log$  true is lUp?  ; 
+
+Word: Log
+
+\ Logmeldung senden, wenn mîglich. 4.049 Ohne try, geloggte Events werden
+\ mit try gerufen. 
+: Log   ( "adr -- )
+     Profi? if LogLine else drop then  ; 
+
+Group: .Eintrag
+
+Word: Eintrag(i)
+
+\ Liefert i-ten Eintrag in Liste von anker  {i=1..n} 
+: Eintrag(i)   ( anker i -- eintrag )
+     swap first swap 1 ?do Nachfolger loop  ; 
+
+Word: i(Eintrag)
+
+\ Liefert Index i des Eintrags in Liste von anker 
+: i(Eintrag)   ( anker eintrag -- i )
+     >r first 1 swap
+     begin     dup r@ <>
+     while     swap 1+ swap Nachfolger 
+     repeat r> 2drop  ; 
+
+Word: #EintrÑge
+
+\ Gesamtanzahl EintrÑge in Liste von anker 
+: #EintrÑge   ( anker -- n )
+     dup i(Eintrag) 1-  ; 
+
+Word: Eintrag0
+
+\ Der erste Eintrag, der im Fenster sichtbar ist, bestimmt aus Abstand
+\ zu aktiv und ende. 
+: Eintrag0   ( aktiv anker -- eintrag )
+     dup rot i(Eintrag) Fensterhîhe 2/ -    ( -- anker i' )
+     over #EintrÑge Fensterhîhe 1- - min
+     1 max Eintrag(i)  ; 
+
+Word: FModus
+
+\ Das Fenster (Modus), in dem EintrÑge gezeigt werden. 
+0 integer FModus 
+
+Word: .WCode
+
+\ HÑngt Zusatzinfo fÅr Wortname an in-Line: Nameclash oder Geladen-Flag
+\ und zca. Bei Nameclash-Bedingung testen, ob die Namenkollision immer
+\ noch existiert und eventuell aufheben. 
+: .WCode   ( eintrag -- )
+     32? if 46 else 50 then is linePos  
+     dup InAlfa? 0= over name c@s and   \ Nameclash?  
+     if   dup AlfaEinhÑngen             \ eventuell aufheben  4.213
+          dup InAlfa? if 'bl else 19 then    
+     else dup geladen? if ascii c else 'bl then 
+     then lEmit  
+     Codefeld 16? if 2+ @s 5 lu. else d@s 7 ld. then  ; 
+
+Word: lName
+
+\ Holt Name aus Eintrag in Linebuf an aktuelle lPos 
+: lName   ( eintrag -- )
+     EName$ count lType  ; 
+
+Word: .Name
+
+\ EintrÑge in Browserfenster haben ein Leerzeichen am Anfang. 
+\ [Worte, die .Name brauchen, mÅssen FModus korrekt setzen.] 
+: .Name   ( eintrag y -- )
+    2 add LinePos  swap dup lName 
+    FModus %Wort = Help? 0= and if .wCode else drop then  .Line  ; 
+
+Word: Balken
+
+: Balken
+     inverse 176 Linebuf Initline  0 .Line  normal  ; 
+
+Group: Zeigen
+
+Word: 1Wort
+
+0 integer 1Wort 
+
+Word: 1Gruppe
+
+0 integer 1Gruppe 
+
+Word: 1Modul
+
+0 integer 1Modul 
+
+Word: AktWortZeile
+
+0 integer AktWortZeile 
+
+Word: AktGrpZeile
+
+0 integer AktGrpZeile 
+
+Word: AktModZeile
+
+0 integer AktModZeile 
+
+Word: Old#Worte
+
+0 integer Old#Worte 
+
+Word: Old#Gruppen
+
+0 integer Old#Gruppen 
+
+Word: Old#Module
+
+0 integer Old#Module 
+
+Word: Zeigen
+
+\ Alle EintrÑge zeigen, aktiven Eintrag hell 
+: Zeigen   ( anker aktiv mode -- #eintrÑge eintrag0 )
+     is FModus >normal 2dup  
+     swap Eintrag0 dup>r                ( -- anker aktiv eintrag )
+     rot #EintrÑge dup>r Fensterhîhe min ?dup
+     if   0 do 2dup = 
+               if   FModus Modus = if >inverse else >bold then
+                    i is AktivZeile
+               then dup i .Name >normal Nachfolger
+          loop
+          Fensterhîhe r@ > if Fensterhîhe r@ do i .line loop then
+     else wipe FModus Modus = if Balken then
+     then 2drop r> r>  ; 
+
+Word: WorteZeigen
+
+: WorteZeigen
+     WortFenster Wortanker AktivWort %Wort Zeigen 
+     is 1Wort is Old#Worte  AktivZeile is AktWortZeile  ; 
+
+Word: GruppenZeigen
+
+: GruppenZeigen
+     GruppeFenster Gruppenanker AktivGruppe %Gruppe Zeigen 
+     is 1Gruppe is Old#Gruppen  AktivZeile is AktGrpZeile  ; 
+
+Word: ModuleZeigen
+
+: ModuleZeigen
+     ModulFenster Modulanker AktivModul %Modul Zeigen 
+     is 1Modul is Old#Module  AktivZeile is AktModZeile  ; 
+
+Word: ListenZeigen
+
+\ Listen neu zeigen. 4.011 
+: ListenZeigen
+     Modulezeigen Gruppenzeigen Wortezeigen  ; 
+
+Group: Delete
+
+Word: AlfaAbketten
+
+\ Eintrag aus Alfakette nehmen und als nicht-eingetragen markieren
+\ (Alfa zeigt auf sich selbst) 
+: AlfaAbketten   ( eintrag -- )
+     dup inAlfa? 0= if drop exit then
+     dup AlfaNachfolger over AlfavorgÑnger is AlfaNachfolger
+     dup is AlfaNachfolger  ; 
+
+Word: GruppeAbketten
+
+\ Worte der Gruppe aus der Alfakette nehmen. 
+: GruppeAbketten   ( gruppe -- )
+     46 emit doAll: AlfaAbketten  ; 
+
+Word: ModulAbketten
+
+\ Worte des Moduls aus der Alfakette nehmen. 
+: ModulAbketten   ( modul -- )
+     doAll: GruppeAbketten  ; 
+
+Word: ErstesItem?
+
+\ Der Nachfolger vom VorgÑnger ist gleich dem Eintrag, ausser wenn der
+\ VorgÑnger ein Anker ist, weil dann Vor und Nach in anderen Feldern
+\ liegen. eintrag ist vorne, wenn davor ein Anker liegt. 
+: ErstesItem?   ( eintrag -- f )
+     dup VorgÑnger Nachfolger <>  ; 
+
+Word: LetztesItem?
+
+: LetztesItem?   ( eintrag -- f )
+     dup Nachfolger VorgÑnger <>  ; 
+
+Word: DeleteEintrag
+
+\ Eintrag aus der Arbeitskette nehmen: Nachfolger in Nachfolger von
+\ VorgÑnger setzen, Vor in Vor von Nach. 
+: DeleteEintrag   ( eintrag -- )
+     dup Nachfolger over dup VorgÑnger swap ErstesItem?
+     if !first else is Nachfolger then
+     dup VorgÑnger swap dup Nachfolger swap LetztesItem?
+     if !last else is VorgÑnger then  
+     " deleted" Log   ; 
+
+Word: DeleteWort
+
+: DeleteWort
+     KeineWorte? ?Exit 
+     AktivWort dup DeleteEintrag dup Nachfolger WortAnker =
+     if dup VorgÑnger else dup Nachfolger then is AktivWort
+     AlteWorte over is AlteWorte over is VorgÑnger
+     AlfaAbketten sUpdate  ; 
+
+Word: DeleteGruppe
+
+: DeleteGruppe
+     KeineGruppen? ?Exit 
+     SaveScreen AktivGruppe dup " Deleting: " EMeldung
+     dup DeleteEintrag dup GruppeAbketten
+     dup Nachfolger Gruppenanker =
+     if dup VorgÑnger else dup Nachfolger then is AktivGruppe
+     AlteGruppen over is AlteGruppen swap is VorgÑnger sUpdate 
+     normal 1sec RestoreScreen  ; 
+
+Word: DeleteModul
+
+\ Modul ausklinken und vorne in Deleteliste legen hinter Altemodule,
+\ Vorg.feld zeigt dann auf nÑchstes Modul in der Liste, oder 0. 
+: DeleteModul
+     Modulanker #EintrÑge 1 = 
+     if " You can't delete the program--please create a new project"
+          Wartemeldung 0 is Oldmodul exit  
+     then
+     SaveScreen AktivModul dup " Deleting: " EMeldung
+     dup DeleteEintrag dup ModulAbketten
+     dup Nachfolger Modulanker =
+     if dup VorgÑnger else dup Nachfolger then is AktivModul
+     AlteModule over is AlteModule swap is VorgÑnger  
+     normal 1sec sUpdate RestoreScreen  ; 
+
+Group: Clear
+
+Word: ClearWort
+
+: ClearWort   ( eintrag -- )
+     0 over Codefeld !s  0 over Codefeld 2+ !s
+     0 over IntpFeld !s  0 over Compfeld !s
+     0 over Flagfeld !s  0 swap Classfeld !s  ; 
+
+Word: ClearGruppe
+
+: ClearGruppe   ( gruppe -- )
+     doAll: ClearWort  ; 
+
+Word: ClearModul
+
+: ClearModul   ( modul -- )
+     doAll: ClearGruppe  ; 
+
+Word: ClearModules
+
+: ClearModules
+     ModulAnker doAll: ClearModul  ; 
+
+Word: ClearDelWords
+
+: ClearDelWords
+     AlteWorte begin ?dup while dup ClearWort VorgÑnger repeat  ; 
+
+Word: ClearAll
+
+: ClearAll
+     ClearModules ClearDelWords  ; 
+
+Group: Insert
+
+Word: GruppeEinhÑngen
+
+: GruppeEinhÑngen   ( gruppe -- )
+     46 emit doAll: AlfaEinhÑngen  ; 
+
+Word: ModulEinhÑngen
+
+: ModulEinhÑngen   ( modul -- )
+     doAll: GruppeEinhÑngen  ; 
+
+Word: Vor?
+
+\ Flag fÅr Insert 
+0 integer Vor? 
+
+Word: InsertEintrag
+
+\ Eintrag vor oder nach aktivem Eintrag einbinden 
+: InsertEintrag  ( eintrag aktiv -- )
+     vor?
+     if   dup ErstesItem? >r  2dup VorgÑnger 2dup 
+          r> if !first else is Nachfolger then
+          swap is VorgÑnger 2dup is VorgÑnger swap is Nachfolger
+     else dup LetztesItem? >r  2dup Nachfolger 2dup 
+          r> if !last else is VorgÑnger then
+          swap is Nachfolger 2dup is Nachfolger swap is VorgÑnger
+     then  ; 
+
+Word: InsertEintrag1
+
+: InsertEintrag1   ( item anker -- )
+     2dup !last 2dup !first
+     swap 2dup is VorgÑnger is Nachfolger  ; 
+
+Word: InsertWort
+
+: InsertWort
+     SaveScreen
+     AlteWorte ?dup 0=
+     if   " No words deleted" Kurzmeldung
+     else dup VorgÑnger is AlteWorte dup AktivWort 
+          KeineWorte? if InsertEintrag1 else InsertEintrag then 
+          dup is AktivWort AlfaEinhÑngen sUpdate  
+          " inserted" Log
+     then RestoreScreen  ; 
+
+Word: InsertGruppe
+
+: InsertGruppe
+     Savescreen
+     AlteGruppen ?dup 0=
+     if   " No groups deleted" Kurzmeldung
+     else dup " Inserting: " EMeldung
+          dup VorgÑnger is AlteGruppen dup AktivGruppe 
+          KeineGruppen? if InsertEintrag1 else InsertEintrag then
+          dup is AktivGruppe dup GruppeEinhÑngen ClearGruppe sUpdate  
+          " inserted" Log  1sec
+     then  Restorescreen  ; 
+
+Word: InsertModul
+
+: InsertModul
+     SaveScreen AlteModule ?dup 0=
+     if   " No modules deleted" Kurzmeldung
+     else dup " Inserting: " EMeldung
+          dup VorgÑnger is AlteModule dup AktivModul 
+          KeineModule? if InsertEintrag1 else InsertEintrag then
+          dup is AktivModul dup ModulEinhÑngen ClearModul sUpdate  
+          " inserted" Log  1sec
+     then RestoreScreen  ; 
+
+Group: Strukturliste
+
+Word: sEintrÑge
+
+\ Anzahl EintrÑge in der Struktur 
+: sEintrÑge   ( -- n )
+     sHereItem  ; 
+
+Word: sAnfang
+
+: sAnfang   ( ?anfang -- anfang )
+     sEintrÑge Fensterhîhe - min 0 max  ; 
+
+Word: .sEintrag
+
+: .sEintrag   ( y eintrag -- )
+     >normal
+     dup 4 lu.  [char] : lEmit  lSpace
+     10 0 do dup i 2* @s 4 lu. lSpace loop  lSpace lSpace
+     lName .Line  ; 
+
+Word: .Struktur
+
+: .Struktur   ( anfang -- )
+     wipe Fensterhîhe sEintrÑge min 0
+     ?do i over .sEintrag 1+ loop  drop  ; 
+
+Word: StrukturMenu
+
+: StrukturMenu
+     1 Feld" "
+     2 Feld" Up"
+     3 Feld" Down"
+     4 Feld" Start"
+     5 Feld" End"
+     6 Feld" "
+     7 Feld" "
+     8 Feld" Exit"  ; 
+
+Word: StrukturListe
+
+: StrukturListe
+     theBase hex StrukturMenu Deffenster
+     AktivWort Fensterhîhe 2/ -
+     begin     sAnfang dup .Struktur
+               key ?dup
+               if   'Esc = if drop is theBase exit then
+               else case
+                    F2 of Fensterhîhe 1- - endof
+                    F3 of Fensterhîhe 1- + endof
+                    'up of Fensterhîhe 1- - endof
+                    'down of Fensterhîhe 1- + endof
+                    F4 of drop 0 endof
+                    F5 of drop sHereItem endof
+                    F8 of drop is theBase exit endof
+                    drop endcase
+               then
+     again is theBase  ; 
+
+Group: DelModListe
+
+Zeigt eine Liste der gelîschten Module, aus der Module ausgewÑhlt und
+in die Struktur eingesetzt werden kînnen. 
+
+Word: #DelMod
+
+\ Liefert die Anzahl gelîschter Module. 4.071 
+: #DelMod
+     0 AlteModule begin ?dup while 1 +2nd VorgÑnger repeat  ; 
+
+Word: iMod
+
+\ Index des ausgewÑhlten Moduls. 4.071 
+0 integer iMod 
+
+Word: DelMod(i)
+
+\ i-tes gelîschtes Modul. 
+: DelMod(i)   ( i -- eintrag )
+     AlteModule  #DelMod 0 do over i = ?leave VorgÑnger loop nip  ; 
+
+Word: dmBasis
+
+\ Der Basis-Index der sichtbaren EintrÑge. 
+0 integer dmBasis 
+
+Word: .DelModListe
+
+: .DelModListe
+     $1B ['] normal 3 + c! >normal      \ Text blau
+     iMod Fensterhîhe 1- - 0 max is dmBasis  %Modul is FModus  \ 4.225
+     AlteModule #DelMod ( Fensterhîhe min ) 0
+     do   i dmBasis >= i dmBasis Fensterhîhe + <= and 
+          if   i iMod = if >inverse then
+               dup i dmBasis - .Name >normal 
+          then VorgÑnger 
+     loop  drop 
+     $1F ['] normal 3 + c!  ;           \ Text weiss 
+
+Word: InsDelMod
+
+\ Das gewÑhlte Modul in die Struktur einsetzen und die Listen
+\ auffrischen. 4.071 
+: InsDelMod
+     sft? 0= is vor?  
+     iMod DelMod(i) dup " Inserting: " EMeldung
+     dup VorgÑnger 
+     iMod if iMod 1- DelMod(i) is VorgÑnger else is AlteModule then
+     dup AktivModul InsertEintrag
+     dup is AktivModul dup ModulEinhÑngen ClearModul 
+     .Comment Modulezeigen Gruppefenster  ; 
+
+Word: DoDelModLIste
+
+: DoDelModLIste
+     0 is iMod  Wortfenster wipe Wipetext GruppeFenster wipe 
+     x1 7 + y3 1+ xy 72 spaces          \ Modulname im Text lîschen
+     begin .DelModListe key ?dup
+           if  'Esc = if exit then
+           else case
+                'up of -1 add iMod endof
+                'down of 1 add iMod endof
+                'Ins of InsDelMod #DelMod 0= ?exit wipe endof
+                F8 of exit endof
+                drop endcase
+           then iMod 0 max #DelMod 1- min is iMod
+     again  ; 
+
+Word: DelModListe
+
+\ Die Liste der gelîschten Module zeigen und Gelegenheit bieten, Module
+\ auszuwÑhlen und in die Struktur einzusetzen. 4.071 
+: DelModListe
+     #DelMod 0= ?exit 
+     SaveScreen DoDelModliste RestoreScreen ModuleZeigen ; 
+

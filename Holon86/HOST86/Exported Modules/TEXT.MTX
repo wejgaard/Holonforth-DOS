@@ -1,0 +1,329 @@
+Module: Text
+
+Group: Textfile
+
+Word: ProgTextfile
+
+0 integer ProgTextfile 
+
+Word: HelpTextfile
+
+0 integer HelpTextfile 
+
+Word: Textfile
+
+\ Handle des aktuellen Textfiles 
+: Textfile   ( -- h )
+     Help? if HelpTextfile else ProgTextfile then  ; 
+
+Word: OpenProgText
+
+: OpenProgText
+     Textfile$ open-r/w dup
+     0= if " TEX-File not available" ErrMsg then
+     is ProgTextfile  ; 
+
+Word: OpenHelpText
+
+\ Oeffnet HelpTextfile, falls vorhanden, setzt sonst NoHelp-Flag. 
+: OpenHelpText
+     HelpTextfile$ open-r/w dup
+     0= if drop set NoHelp? else is HelpTextfile then  ; 
+
+Word: OpenText
+
+: OpenText
+     OpenProgText OpenHelpText  ; 
+
+Word: UpdateText
+
+: UpdateText
+     Textfile duph close drop  ; 
+
+Word: CloseText
+
+: CloseText
+     ProgTextfile close drop  clear ProgTextfile            \ 4.224
+     NoHelp? 0= if HelpTextfile close drop clear HelpTextfile then  ; 
+
+Word: TextEnde
+
+: TextEnde   ( -- u )
+     Textfile Filelength 16 um/mod swap if 1+ then  ; 
+
+Word: mgTextfeld
+
+\ Offset fÅr Textzeiger in Modul- und Gruppeneintrag. 4.011 
+10 constant mgTextfeld 
+
+Word: TextEintrag
+
+\ Adresse in Struktur von aktuellem Textfeld fÅr Wort, Gruppe oder Modul.
+\ 4.011  Im Editor den Callmodus berÅcksichtigen, speziell beim Uebergang
+\ zum Infomodus. 4.012 
+: TextEintrag   ( -- eintrag offset )
+     Edit?                                       \ fÅr Alt+F6=Restore
+     Info? Workmodus %Edit = and Help? 0= and    \ Edit ruft Info ?
+     or if CallModus else Modus then  
+     case
+     %Modul of AktivModul mgTextfeld endof
+     %Gruppe of AktivGruppe mgTextfeld endof
+     drop AktivWort Textfeld endcase  ; 
+
+Word: TextZeiger
+
+\ Ein Wort hat immer einen Textzeiger (der bei Null beginnt). Der
+\ zugehîrige Text kann leer sein, bildet aber einen Eintrag im Textfile
+\ (zwei Leerzeichen). Module und Gruppen habe nur einen Text, wenn der
+\ Textzeiger >0 ist. Das Textfeld bleibt zuerst leer.
+\ 74g Textzeiger auch in Modul und Gruppe. 4.011 
+: TextZeiger   ( -- textadr )
+     Texteintrag @s  ; 
+
+Word: !Textzeiger
+
+: !Textzeiger   ( textadr -- )
+     TextEintrag !s  ;                  \ 4.012 
+
+Word: tUp?
+
+\ Flag fÅr Textupdate. 
+0 integer tUp? 
+
+Group: Text
+
+Ein Textrecord beginnt auf einer Paragraphgrenze und wird als Paragraph
+adressiert. Er hat das Format: | deflen | text-definition | comlen |
+text-comment | defcur | comcur | 16 Bytes Wortinfo | 
+
+Word: TextLÅcke
+
+\ Grîsse des Textrecords in Paragraphen, gleich verfÅgbare LÅcke im File. 
+0 integer TextLÅcke 
+
+Word: WortInfo
+
+\ Wortinformationen, Datum, Autor, Validierung, etc. 
+create WortInfo     16 allot 
+
+Word: GetText
+
+: GetText
+     Textfile @h BufLen 1- min 0 max dup is DefLÑnge 
+     if cs: DefBuf DefLÑnge Textfile read drop then
+     Textfile @h BufLen 1- min 0 max dup is ComLÑnge
+     if cs: ComBuf ComLÑnge Textfile read drop then  
+     Textfile @h DefLÑnge min is DefCur
+     Textfile @h ComLÑnge min is ComCur  
+     cs: WortInfo 16 Textfile read drop     \ HOLON30
+     0 is DefY0  0 is ComY0  ; 
+
+Word: @Text
+
+\ Bei leerem Textzeiger keinen Text holen (Module und Gruppen), und
+\ TextlÅcke=0 setzen. FÅr Wort ist Textzeiger=0 ok. Gezielt auf M,G
+\ testen statt auf Wort? 0=, kann auch in Edit? gerufen werden. Bei Edit?
+\ aber Callmodus nehmen!! 
+: @Text
+     TextZeiger TextEnde u< 0= 
+     if " Word is not in .TEX-file" ErrMsg then
+     TextZeiger 0=                                     \ 4.011 4.012
+     if   Edit? if Callmodus else Modus then %Wort <   \ 4.099
+          if 0 is TextLÅcke endtry then                \ 4.020 4.065
+     then     
+     TextZeiger 16 um* Textfile lseek 2drop  GetText 
+     DefLÑnge ComLÑnge + 24 + 
+     Paragraphs is TextLÅcke ; 
+
+Word: Import/Export?
+
+\ true wÑhrend Import & Exports 
+0 integer Import/Export? 
+
+Word: ?Voll
+
+: ?Voll   ( n1 n2 -- )
+     <> if " Sorry, disk is full" EndMeldung then  ; 
+
+Word: MaxTextzeiger
+
+\ Der Textzeiger wird begrenzt, damit er nicht zu 0 Åberfliessen und die
+\ Textdatei unten Åberschreiben kann. $FFFF minus [2048 (max.Text pro
+\ Wort) = $80 Paragraphen] == $FF70.  4.144 
+$FF70 constant MaxTextzeiger 
+
+Word: ?TextEnde
+
+\ Meldet das nahende Ende des TEX-Files (noch rund 10 Worte Platz) und
+\ speichert den Text. Bricht beim Ende ab, und speichert nicht. 4.144 
+: ?TextEnde   ( u -- )
+     dup MaxTextzeiger 320 - u>   \ 320 Para == 10 Worte a 500 char.
+     if   MaxTextzeiger u>
+          if   " Sorry, TEX-file is full" Endmeldung
+          else " Sorry, TEX-file is nearly full -- consult manual"
+               Wartemeldung
+          then
+     else drop
+     then  ; 
+
+Word: (!Text)
+
+\ Wortrecord inklusive Cursors auf Textfile schreiben (try). Position u
+\ als Parameter Åbergeben. Bei Export 16 Bytes Wortinfo schreiben. Nicht
+\ sofort updaten. 
+: (!Text)   ( u -- )
+     dup ?TextEnde                                          \ 4.144
+     16 um* Textfile lseek 2drop
+     DefLÑnge dup Textfile !h  
+     if cs: DefBuf DefLÑnge Textfile write DefLÑnge ?Voll then
+     ComLÑnge dup Textfile !h
+     if cs: ComBuf ComLÑnge Textfile write ComLÑnge ?Voll then
+     DefCur Textfile !h  ComCur Textfile !h
+     cs: Wortinfo 16 Textfile write 16 ?voll     
+     true is tUp?  SetUpdateMarke  ; 
+
+Word: ClrEnd
+
+\ Hinteren Leerraum abschneiden (space und cr), liefert neue LÑnge.
+\ Buffer enthÑlt mindestens 1 space :: blen >= 1 
+: ClrEnd   ( -- n )
+     Buf blen +                         \ Position hinter Text
+     blen 0
+     ?do  1- dup c@ 32 > 
+          if 1+ leave else 32 over c! then
+     loop 
+     buf - 1+  ; 
+
+Word: Platz?
+
+\ Hat Wortrecord noch Platz am alten Ort? WortlÅcke in Para 
+: Platz?   ( -- f )
+     DefLÑnge ComLÑnge + 24 + Paragraphs TextLÅcke 1+ <  ; 
+
+Word: !Text
+
+\ Worttext als Record auf Textfile speichern. Textzeiger nur an Ende
+\ setzen, wenn Wort ok gespeichert. 
+: !Text
+     Comment ClrEnd is ComLÑnge
+     Definition ClrEnd is DefLÑnge
+     Platz? 
+     if   TextZeiger try (!Text) tryError? if drop then
+     else TextEnde dup try (!Text)  
+          tryError? if 2drop else !TextZeiger sUpdate then
+     then  ; 
+
+Word: ShowCom
+
+: ShowCom
+     InitCom  0 is Y0  .Buffer  ; 
+
+Word: ShowDef
+
+: ShowDef
+     InitDef  0 is Y0  .Buffer  ; 
+
+Word: ShowText
+
+: ShowText
+     ShowCom ShowDef  ; 
+
+Word: .wText
+
+\ Bei MacroView keinen Text zeigen. 
+: .wText
+     Macro? ?exit                                       \ 4.011
+     try @Text TryError? 
+     if   TextLîschen
+     else Searching? 0= if WortDisplay ShowText then    \ 4.014
+     then  ; 
+
+Word: .mgText
+
+\ Text von Gruppe oder Modul holen und zeigen. 
+: .mgText
+     Macro? ?exit                      
+     mgDisplay ComLîschen  
+     x1 7 + y3 1+  2dup xy 72 spaces xy
+     Edit? if Callmodus else Modus then %Modul = 
+     if   Help? if ." Chapter " else ." Module " then AktivModul 
+     else Help? if ." Section " else ." Group " then AktivGruppe 
+     then     
+     bold EName$ count type normal 
+     try @Text TryError? if DefLîschen else ShowDef then  ; 
+
+Group: Zeigen
+
+Word: WipeWords
+
+\ Textfenster nur lîschen, wenn Wortmodus. 4.011 
+: WipeWords
+     micro? Wort? and if WortDisplay WipeText then WortFenster wipe  ; 
+
+Word: Wipegruppen
+
+\ Textfenster lîschen, wenn Gruppenmodus. 4.072 
+: Wipegruppen
+     micro? Gruppe? and if WortDisplay WipeText mgDisplay then  ; 
+
+Word: .Worte
+
+\ Wenn das Wort schon da ist, soll es nicht neu gelesen werden. Nîtig bei
+\ Find, damit Cursor der Findposition entspricht. 
+: .Worte
+     KeineWorte?                                \ 4.072
+     if   WipeWords Wort? if Balken then
+          0 is OldWort                                      \ 4.011
+     else Modus OldModus <> AktivWort OldWort <> or 
+          if   WorteZeigen AktivWort is OldWort 
+               Wort? if .wText then                         \ 4.011 
+          then
+     then  ; 
+
+Word: .Gruppen
+
+\ Mit Gruppetext. 
+: .Gruppen
+     KeineGruppen?
+     if   GruppeFenster wipe Gruppe? if Balken then
+          0 is OldGruppe WipeGruppen                   \ 4.011 4.072
+     else Modus OldModus <> AktivGruppe OldGruppe <> or 
+          if   GruppenZeigen AktivGruppe is OldGruppe 
+               Gruppe? if .mgText then                      \ 4.011
+          then
+     then .Worte  ; 
+
+Word: .Module
+
+\ Liest nur dann neuen Text ein, wenn das Modul geÑndert hat! 
+: .Module
+     KeineModule?                          
+     if   ModulFenster wipe 
+     else Modus OldModus <> AktivModul OldModul <> or 
+          if   ModuleZeigen AktivModul is OldModul 
+               Modul? if .mgText then                 \ 4.011
+          then
+     then .Gruppen  Modus is OldModus  ; 
+
+Word: NeuZeigen
+
+\ Alle Modi zurÅcksetzen. 
+: NeuZeigen
+     0 is OldModul 0 is OldGruppe 0 is OldWort .Module  ; 
+
+Word: ShowAll
+
+\ Browser auffrischen, Listen und Text. 
+: ShowAll
+     ListenZeigen ShowText  ; 
+
+Word: AllesZeigen
+
+: AllesZeigen
+     NeuZeigen .Stack  ; 
+
+Word: UpBild
+
+: UpBild
+     NormMenu AllesZeigen  ; 
+

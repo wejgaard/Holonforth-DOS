@@ -1,0 +1,832 @@
+Module: Code
+
+Group: zCode
+
+Grundspeicherraum fÅr Maschinencode, Listcode und Daten (je nach Target
+kînnen Listen oder Daten in xCode gelegt werden.) Verwendet absolute
+Adressen tadr mit 32 Bit. 
+
+Word: zBegin
+
+\ Anfangsadresse von zCode (initialisieren fÅr Holon-86) 
+$100. double zBegin 
+
+Word: zLimit
+
+\ Obergrenze von zCode von Target, letztes vorhandenes Byte. 
+$DFFF. double zLimit 
+
+Word: zEnd
+
+\ Aktuelles Ende des zCode +1, zEnd zeigt hinter zCode. Init. = zBegin. 
+zBegin double zEnd 
+
+Word: ROMBaseXX
+
+\ Korrigiert die ROM Basis fÅr Target XX. 
+Doer ROMBaseXX 
+
+Word: ROMTopXX
+
+\ Korrigiert die ROM Obergrenze fÅr Target XX. 
+Doer ROMTopXX 
+
+Word: =ROM-Base_
+
+\ Korrigiert fÅr Target XX und Test/Profisystem. 
+:_ =ROM-Base_   ( adr -- )
+     ?>32 ROMBaseXX 2dup is zBegin is zEnd  ;               \ 4.242 
+
+Word: =ROM-Top_
+
+:_ =ROM-Top_   ( adr -- )
+     ?>32 ROMTopXX is zLimit  ;                             \ 4.242 
+
+Word: zCode
+
+\ Codefenster fÅr das Compilieren von zCode. zCode ist Fenster im
+\ Target. 
+create zCode   1024 allot 
+
+Word: zStart
+
+\ Startadresse des zCodefensters im Target 
+0. double zStart 
+
+Word: zBytes
+
+\ LÑnge des Codes im zCodefenster, 0..1023 entsprechend zugelassener
+\ CodelÑnge in Worteintrag. Bufferbereich kann grîsser sein, wird aber
+\ maximal als 1023 erfasst. 
+0 integer zBytes 
+
+Word: zHere
+
+\ Liefert absolutes Ende des zCode im Target. 
+: zHere   ( -- tadr )
+     zStart zBytes 0 d+  ; 
+
+Word: zCodeHere
+
+\ Aktuelles Codeende im zCodefenster im Host. 
+: zCodeHere   ( -- adr )
+     zCode zBytes +  ; 
+
+Word: +zBytes
+
+\ n Bytes im zCodefenster reservieren 
+: +zBytes   ( n -- )
+     zBytes + 1023 min is zBytes  ; 
+
+Word: zAllot
+
+\ Reserviert u Bytes im zCodefenster, solange Platz ist. Falls der
+\ Bereich grîsser ist, wird zEnd um den Rest verschoben. Das Codefenster
+\ wird an den Anfang des reservierten Bereichs kopiert. Ann.: Es gibt nie
+\ Code am Ende des reservierten Bereiches. Der reservierte Platz im
+\ Fenster wird mit dem Breakcode gefÅllt. 
+: zAllot   ( u -- )
+     add zBytes
+     zEnd zBytes 0 d+ zLimit d> 
+     if " Sorry, code limit exceeded" LoadMeldung then
+     zBytes 1023 > if zBytes 1023 - 0 add zEnd  1023 is zBytes then
+     ; 
+
+Word: c,z
+
+\ c in zCodefenster compilieren 
+: c,z   ( c -- )
+     zCodeHere c!  1 +zBytes  ; 
+
+Word: c,z_
+
+\ Version fÅr das Target, zum Basteln. 
+:_ c,z_
+     c,z  ; 
+
+Word: ,z
+
+\ n in zCodefenster compilieren 
+: ,z   ( n -- )
+     zCodeHere !t  2 +zBytes  ; 
+
+Word: zHereReset
+
+: zHereReset
+     0 is zBytes  ; 
+
+Word: zOffset
+
+\ Offset zu zHere wÑhrend des Ladens eines Wortes. Benutzt fÅr das Senden
+\ mehrerer Strings beim Interpretieren. 
+0 integer zOffset 
+
+Word: zCodeMitBreakFÅllen
+
+\ Das zCodefenster mit dem targetabhÑngigen Opcode fÅr Break fÅllen. 
+Doer zCodeMitBreakFÅllen 
+
+Group: xCode
+
+Der xCode arbeitet wie der zCode mit absoluten Targetadressen tadr.
+Besonderheiten des Targetmodells (FPC) werden in TARGET-XX behandelt,
+soweit mîglich. 
+
+Word: xBegin
+
+\ Beginn des xCode (Datenbereich und Listcode). 
+0. double xBegin 
+
+Word: xLimit
+
+\ Obergrenze des xCoderaums, wird beim Wachsen des Programms verschoben.
+\ Defaultwert fÅr H-86. Wird in BASIS korrigiert in Targets, die xCode
+\ als Datenraum verwenden (H-11). 
+$11FF0. double xLimit       \ korrespondiert mit mxBegin und mxLimit 
+
+Word: xEnd
+
+\ Aktuelles Ende von xCode. 
+0. double xEnd 
+
+Word: xCode
+
+\ Codefenster fÅr das Compilieren von xCode. xCode ist Fenster im
+\ Target. 
+create xCode   1024 allot 
+
+Word: xStart
+
+\ Startadresse des xCodefensters im Target. 
+0. double xStart 
+
+Word: xBytes
+
+\ LÑnge des Codes im xCodefenster. 
+0 integer xBytes 
+
+Word: xHere
+
+\ Absoluter Wert von xHere (Obergrenze des Datenbereiches). Nicht FPC. 
+: xHere   ( -- tadr )
+     xStart xBytes 0 d+  ; 
+
+Word: xCodeHere
+
+\ Aktuelle Adresse im xCodefenster. 
+: xCodeHere   ( -- adr )
+     xCode xBytes +  ; 
+
+Word: xAllot
+
+: xAllot   ( n -- )
+     xBytes + 1024 min is xBytes 
+     xHere xLimit d> 
+     if   fpc?
+          if   " Sorry, list code full" 
+          else " Sorry, data space full" 
+          then LoadMeldung
+     then  ; 
+
+Word: c,x
+
+: c,x   ( b -- )
+     xCodeHere c! 1 xAllot  ; 
+
+Word: ,x
+
+: ,x   ( n -- )
+     xCodeHere !t 2 xAllot  ; 
+
+Word: xAllot0
+
+\ n Bytes reservieren und zu Null initialisieren. 
+: xAllot0   ( n -- )
+     0 ?do 0 c,x loop  ; 
+
+Word: =RAM-Base_
+
+:_ =RAM-Base_   ( adr -- )
+     ?>32 2dup is xBegin is xEnd  ; 
+
+Word: =RAM-Top_
+
+\ Nicht in H-86 verwenden. 
+:_ =RAM-Top_   ( adr -- )
+     ?>32 is xLimit  ; 
+
+Word: =xEnd_
+
+\ Zum gezielten Setzen des RAM-Zeigers vom Target aus. Benutzt in H11. 
+:_ =xEnd_   ( adr -- )
+     ?>32 is xEnd  ; 
+
+Word: RAM-Base_
+
+:_ RAM-Base_   ( -- w / d )
+     xBegin ?>16  ; 
+
+Group: mCode
+
+Metacode, der vom Target im Host gebildet wird beim Definieren von
+COMPILER:-Wîrtern. 
+
+Word: mCompiling
+
+Text: mCompiling
+Mechanismus zum Ablegen von Code in den Host, als AusfÅhrungscode der
+Compilerworte, die mit dem Target gebildet werden (mittels dem
+Compiler-Compiler).
+Codebereich wird in festem Bereich oberhalb von normalem Hostprogramm
+reserviert. 
+
+!! Codebereich eventuell verschieben, wenn der Host noch stark
+wÑchst.!! 
+
+Word: mzBegin
+
+\ Anfang des Metacompiler-zCode im Host 
+$E000 constant mzBegin 
+
+Word: mzHere
+
+\ Ende des mzCode 
+0 integer mzHere 
+
+Word: mzLimit
+
+$FE00 constant mzLimit 
+
+Word: ?mzLimit
+
+\ mzCode Grenze kontrollieren. 
+: ?mzLimit
+     mzHere mzLimit u< 0=
+     if   " Sorry, host code space is full." 
+          LoadMeldung
+     then  ; 
+
+Word: m,z
+
+\ Legt 16b in Host ab im Metacode-Bereich. Codegrenze kontrollieren. 
+: m,z   ( 16b -- )
+     mzHere !  2 add mzHere ?mzLimit  ; 
+
+Word: mc,z
+
+\ Grenzkontrolle. 
+: mc,z   ( 8b -- )
+     mzHere c!  1 add mzHere ?mzLimit  ; 
+
+Word: mxBegin
+
+\ Anfang des Metacompiler-xCode im Host (Segment). [Wird bei Start von
+\ Turnkey eventull dynamisch angepasst]. 
+$1200 integer mxBegin 
+
+Word: mxLimit
+
+\ Obergrenze des Listcoderaums im Host. Dahinter kommt die Struktur. 
+$1300 constant mxLimit 
+
+Word: mxHereSeg
+
+\ Obergrenze des xMetacode. 
+0 integer mxHereSeg 
+
+Word: mxHereOff
+
+0 integer mxHereOff 
+
+Word: m,x
+
+\ 16b in xCode von Host ablegen. Mit Grenztest. 
+: m,x   ( 16b -- )
+     mxHereSeg mxLimit < 0= 
+     if   " Sorry, host code space is full." 
+          LoadMeldung
+     then 
+     mxHereSeg xSeg + mxHereOff !l  2 add mxHereOff  ; 
+
+Word: CloseMCode
+
+: CloseMCode
+     mxHereOff paragraphs add mxHereSeg  0 is mxHereOff  ; 
+
+Group: Codefile
+
+Word: Codefile
+
+\ Handle des Codefiles 
+0 integer Codefile 
+
+Word: WriteCodefile
+
+: WriteCodefile   ( seg off n -- )
+     Codefile write drop  ; 
+
+Word: WriteZCode
+
+: WriteZCode 
+     cs: zCode zBytes WriteCodefile  ; 
+
+Word: ReadCodefile
+
+: ReadCodefile   ( seg off n -- )
+     Codefile read drop  ; 
+
+Word: InitCodefile
+
+\ Neues Codefile bilden, dabei das alte lîschen. Mit $FF fÅllen. 
+: InitCodefile
+     Codefile$ mkfile is Codefile 
+     zCodeMitBreakfÅllen 1024 is zBytes
+     64 0 do writeZCode loop
+     Codefile duph close drop  ; 
+
+Word: ?OpenCodefile
+
+\ Falls Codefile nicht existiert, wird ein neues File gebildet. 
+: ?OpenCodefile
+     Codefile$ open-r/w ?dup
+     if   is Codefile 
+     else InitCodefile ClearAll
+     then  ; 
+
+Word: UpdateCodefile
+
+: UpdateCodefile
+     Codefile duph close drop  ; 
+
+Word: CloseCodefile
+
+: CloseCodefile
+     Codefile close drop  clear Codefile  ;                 \ 4.224 
+
+Word: InCodefile
+
+\ Setzt Zeiger in Codefile an Position d bezogen auf zBegin. Liefert
+\ Codehandle. 
+: InCodefile   ( d -- h )
+     Codefile lseek 2drop Codefile  ; 
+
+Group: zSenden
+
+Word: zWriteFile
+
+\ zCodefenster in das Codefile kopieren. 
+: zWriteFile
+     cs: zCode zBytes  zStart inCodefile  write drop  ; 
+
+Word: zSend
+
+\ Ablegen des zCodefensters in Codefile und, wenn mîglich, im Target. --
+\ Erst im Target probieren. Der Monitor testet ob der Codeaustausch
+\ sicher ist und bricht eventuell ab. 4.706 
+: zSend
+     zBytes if Monitor? if zSendTarget then zWriteFile  then  ; \ 4.706 
+
+Word: InZCode?
+
+: InZCode?   ( tadr -- )
+     zStart 2over 1. d+ d< -rot zHere d< and  ; 
+
+Word: zCodeAdr
+
+\ Hostadresse der absoluten tAdr im zCodefenster. 
+: zCodeAdr   ( tadr -- adr )
+     zStart d- drop zCode +  ; 
+
+Word: !zw
+
+\ w in zCodeFenster schreiben, mit angepasster Byteordnung. 
+: !zw   ( w tadr -- )
+     zCodeAdr !t  ; 
+
+Word: !zf
+
+\ n an Position tadr in Codefile ablegen. Byteordnung eventuell Ñndern. 
+: !zf   ( w tadr -- )
+     ?flip3rd inCodefile !h  ; 
+
+Word: !z
+
+\ Schreibt w in Speicher und in Codefile. Wird verwendet fÅr dauernde
+\ Aenderungen im Code. Falls tadr im zCodefenster liegt, genÅgt es, w in
+\ das Codefenster zu schreiben (wird in Target und File kopiert). 
+: !z   ( w tadr -- )
+     2dup inZCode? if !zw else 3dup !zf !zt then  ; 
+
+Word: c!z
+
+\ FÅr Korrekturen (Sprungoffset) in aktuellem Wort im Codefenster. 
+: c!z   ( b tadr -- )
+     2dup inZCode? 
+     if   zCodeAdr c!  
+     else " c!z: adr is not in zCodewindow" LoadMeldung
+     then  ; 
+
+Word: @zf
+
+\ x aus Position tadr in Codefile lesen. Byteordnung Ñndern. 
+: @zf   ( tadr -- w )
+     inCodefile @h ?flip  ; 
+
+Word: @z
+
+\ Liest Inhalt von tadr aus Codefile. Uebliche Verwendung von @z. 
+: @z   ( tadr -- n )
+     @zf  ; 
+
+Word: c@z
+
+\ Benutzt zum Kopieren von Code (Datalink). 
+: c@z   ( tadr - b )
+     @zf split nip  ; 
+
+Word: ?!z
+
+\ Nur 16 oder ganze 32 Bit Zahl bei tadr ablegen. 
+: ?!z   ( d tadr -- )
+     16? 
+     if   2>r drop 2r> !z
+     else 2dup 2>r !z ( hi)  2r> 2. d+ !z ( lo) 
+     then  ; 
+
+Word: ?@z
+
+\ 16 oder 32 Bit Zahl bei tadr in Target lesen. Liefert d. 
+: ?@z   ( tadr -- d )
+     16? 
+     if   @zt 0 
+     else 2dup 2. d+ @zt -rot @zt 
+     then  ; 
+
+Group: xSenden
+
+Word: xWriteFile
+
+\ xCodefenster auf Codefile kopieren ab xStart. Bei FPC sind die ersten
+\ 64KB im Codefile fÅr den zCode reserviert, dahinter wird der xCode
+\ abgelegt. 
+: xWriteFile
+     cs: xCode xBytes  xStart fpc? if $10000. d+ then 
+     inCodefile write drop  ; 
+
+Word: ?xLimits
+
+: ?xLimits   
+     xStart xBytes 0 d+ xLimit d>
+     if " Sorry, RAM limit is exceeded" LoadMeldung then  ; 
+
+Word: xSend
+
+\ xCodefenster zu File und, wenn mîglich, zu Target kopieren. 
+: xSend
+     xBytes 
+     if   ?xLimits xWritefile 
+          Monitor? if xSendTarget then 
+     then  ; 
+
+Word: GetXca
+
+\ Liefert die tadr des xCodes des Wortes (Listcode oder Datenadresse). 
+Doer GetXca   ( tadr1 -- tadr2 ) 
+
+Group: Assembler
+
+Word: NameMeldung
+
+\ Zeigt Word$, wird beim Laden (in Assembler und Compiler) verwendet fÅr
+\ Fehlermeldungen. 
+: NameMeldung
+     ?LoadAll Word$ Meldung 2 spaces "type  WaitKey endtry  ; 
+
+Word: OpCode?
+
+0 integer OpCode? 
+
+Word: TheIP
+
+0. double TheIP 
+
+Word: asp
+
+\ Stackzeiger bei Beginn des Assemblierens eines Wortes, zur
+\ Stackkontrolle. 
+0 integer asp 
+
+Word: !asp
+
+: !asp
+     sp@ is asp  ; 
+
+Word: aDepth
+
+: aDepth   ( -- n )
+     sp@ asp - 2/ negate  ; 
+
+Word: +asp_
+
+\ In Assembler Vokabular legen. 
+:_ +asp_   ( n -- )
+     2* negate add asp  ; 
+
+Word: OldOP
+
+\ || mca || data | cursor |  [Name nicht speichern, es genÅgt, wenn der
+\ Cursor anschliessend auf das Problemwort gesetzt wird]. 
+create OldOP    ' drop , 0 , 0 ,       \ 4.309 
+
+Word: NewOP
+
+create NewOP    ' drop , 0 , 0 , 
+
+Word: AssMsg
+
+\ Bei LoadAll Text auffrischen. 
+: AssMsg   ( "adr -- )
+     OldOp 4 + @ is DefCur  LoadMeldung  ;        \ 4.705 
+
+Word: ?asp
+
+: ?asp
+     sp@ asp - ?dup 0= ?exit 0<
+     if   " Sorry, opcode error, wrong operand?"
+     else " Sorry, opcode error, missing operand?"
+     then AssMsg ; 
+
+Word: a;!
+
+: a;!   ( data mca -- )
+     NewOp 2!  DefCur NewOp 4 + !  ; 
+
+Word: a;
+
+\ Opcode bauen, sobald eine neue Assemblerinstruktion begonnen wird. 
+: a;
+     OldOp 2@ execute                   \ (alten) OpCode bauen
+     ?asp                               \ Stack testen
+     NewOp OldOp 6 move                 \ New wird Old
+     ['] drop NewOp !                   \ vorsichtshalber
+     OpCode? 0= if zHere is theIP then  \ fÅr Step
+     true is OpCode?  ; 
+
+Word: EndCode
+
+: EndCode
+     a;  false is Assembler?  ; 
+
+Word: AssError
+
+: AssError
+     ['] drop NewOp !  " Sorry, wrong operand" AssMsg  ; 
+
+Word: opcode>
+
+\ Legt OpCode(s) ab. [== Create, aber ohne NameDrop, wird mit ,Header
+\ gebraucht (in opdoes>]. 
+Compiler: opcode>
+    Intp: CallCode, ;
+    Comp: Intp: intp, ;
+    Code: doVar 
+
+Word: opdoes>
+
+\ Beschreibt Ablegen des Opcode beim Assemblieren. [== Does>, legt noch
+\ ,Header in Create-Teil] 
+Compiler: opdoes>
+    Intp: ,Header  ;
+    Comp: intp, postpone ; 
+          ResetCode CallCode,  ListSeg ,  ]  ;
+    Code: doDoes 
+
+Word: ResetAss
+
+Doer ResetAss 
+
+Word: #ass
+
+\ Assembler-StrukturzÑhler. Muss am Ende Null sein, sonst ist eine
+\ Struktur nicht aufgelîst worden. 
+0 integer #ass 
+
+Word: ?ass
+
+\ Kontrolliert die Auflîsung der Flussstrukturen im Assemblerwort. 
+: ?ass
+     #ass if " Sorry, wrong control flow structure." AssMsg then  ; 
+
+Word: SetAssembler
+
+: SetAssembler
+     0 ['] drop a;!  NewOp OldOp 6 move
+     true is Assembler? Assembler  
+     ResetAss !asp  0 is #ass  ; 
+
+Word: doJmp
+
+\ Assemblerbefehl JMP. 4.063 
+Doer doJmp 
+
+Group: zLaden
+
+Word: NeuZca
+
+\ Jumpziel bei Verlegung des zCode. 
+0. double NeuZca 
+
+Word: OldZca
+
+\ Alter Ort des zCode. 
+0. double OldZca 
+
+Word: zca
+
+: zca   ( -- tadr )
+     AktivWort Codefeld d@s  ; 
+
+Word: >zFenster
+
+\ zFenster initialisieren, Start bei tadr. 
+: >zFenster   ( tadr -- )
+     is zStart  clear zBytes  ; 
+
+Word: running?
+
+: running?   ( -- f )
+     debug? 0= Monitor? and living? and  ;                  \ 4.706 
+
+Word: Reload?
+
+\ Wenn bereits eine Codeadresse existiert, wird das Wort noch einmal
+\ geladen. 
+: Reload?   ( -- f )
+     Oldzca or 0<>  ;                                       \ 4.706 
+
+Word: zCodeFenster
+
+\ Mîglichst am alten Ort wieder laden. -- Bei FPC kann der zCode am alten
+\ Ort ersetzt werden, da er nur den Stub zum Aufruf des Listencodes
+\ enthÑlt, ausser bei einem Codewort, doch auch das ist sicher, da der
+\ Monitor als Task lÑuft. 
+: zCodeFenster
+     zca is OldZca  zEnd is NeuZca  
+     reload? 
+     if   running?
+          if   fpc? if zca else zEnd then 
+          else zca
+          then
+     else zEnd
+     then >zFenster  ; 
+
+Word: zPlatz?
+
+\ Hat der neue Code am alten Ort Platz? 
+: zPlatz?   ( -- f )
+     zBytes Aktivwort @CodelÑnge > 0=  ; 
+
+Word: zJmpNeu
+
+\ Am Anfang vom alten Code einen Jmp zum neuen Code platzieren. 
+\ [Echt assemblieren um Sprungoffset elegant zu bestimmen]. 
+: zJmpNeu
+     OldZca is zStart  0 is zBytes
+     !asp Assembler doJmp NeuZca ?>16 a;     \ 4.063
+     zSend  ; 
+
+Word: ?zSend
+
+\ zCode senden (falls noch Platz in Speicher) und Aktivwort auffrischen.
+\ Spezialfall 'zCode beginnt bei 0', Bsp. Holon-11: Bootloader 
+: ?zSend
+     zBytes 1- 0 zEnd d+ zLimit d>      \ zEnd zeigt hinter zCodeende
+     if " Sorry, code limit exceeded" LoadMeldung then   
+     zSend                              \ sendet Code
+     zStart AktivWort Codefeld d!s      \ xt eintragen
+     zBytes AktivWort !CodelÑnge
+     zStart OldZca d>                   \ Wort am Codeende?
+     zStart or 0= or              \ Spezialfall zCode beginnt bei 0
+     if zBytes 0 add zEnd then  ; 
+
+Word: ?zSendCode
+
+\ Sendet zCode, falls vorhanden. Wenn zCode an neuem Ort liegt, wird am
+\ alten Ort ein Sprung zum neuen Code eingesetzt.
+\ OldZca auf 0<> testen, 0> genÅgt nicht (Code auch >$7FFF) 
+: ?zSendCode
+     zBytes 
+     if   ?zSend 
+          reload?                       \ Wort neu geladen     4.706
+          zca OldZca d> and             \ und am Ende?
+          if zJmpNeu then               \ Sprung einsetzen 
+     then  ; 
+
+Group: xLaden
+
+Word: @xCodelÑnge
+
+: @xCodelÑnge   ( -- n )
+     Aktivwort Flagfeld @s $7C00 and $400 /  ; 
+
+Word: !xCodelÑnge
+
+: !xCodelÑnge   ( n -- )
+     31 min 0 max $400 * Aktivwort Flagfeld @s $83FF and or
+     Aktivwort Flagfeld !s  ; 
+
+Word: xca
+
+\ Adresse des xCode des Wortes liefern, ist Datenbereich oder Listcode. 
+: xca   ( -- tadr )
+     @xCodelÑnge if OldZca GetXca else 0. then  ; 
+
+Word: >xFenster
+
+\ xFenster initialisieren, Start bei tadr. 
+: >xFenster   ( tadr -- )
+     is xStart  clear xBytes  ; 
+
+Word: xCodeFenster
+
+\ Bei Umdefinition xCode nach hinten, nur wenn es Listcode ist (FPC). 
+: xCodeFenster
+     reload? 
+     if   running?
+          if   fpc? if xEnd else xca then
+          else xca
+          then  
+     else xEnd 
+     then >xFenster  ; 
+
+Word: Paras
+
+: Paras   ( n1 -- n2 )
+     fpc? if Paragraphs then  ; 
+
+Word: xPlatz?
+
+: xPlatz?   ( -- f )
+     xBytes paras @xCodelÑnge > 0=  ; 
+
+Word: ?xSend
+
+: ?xSend
+     xBytes 0 xEnd d+ xLimit d> 
+     if " Sorry, xCode limit exceeded" LoadMeldung then   
+     xSend  
+     xBytes Paras !xCodelÑnge 
+     xStart xEnd d= 
+     if   xBytes fpc? if Paragraphs 16 um* else 0 then 
+          add xEnd 
+     then  ; 
+
+Word: ?xSendCode
+
+\ xCode senden falls vorhanden. 
+: ?xSendCode
+     xBytes if ?xSend else 0 !xCodelÑnge then  ; 
+
+Group: ReadCode
+
+16 Bytes von Target und von Codefile einlesen fÅr Showcode. 
+
+Word: TargetBuf
+
+create TargetBuf   16 allot 
+
+Word: FileBuf
+
+create FileBuf   16 allot 
+
+Word: zCode?
+
+Flag zCode? 
+
+Word: @TargetCode
+
+\ Targetmodell hier nicht berÅcksichtigen. 
+: @TargetCode   ( tadr -- )
+     zCode? if zReadTarget else xReadTarget then  ; 
+
+Word: CodefileLÑnge
+
+\ CodefilelÑnge, ausgedrÅckt in Anzahl Pages (Paragraphen). 
+0. double CodefileLÑnge 
+
+Word: ReadFileCode
+
+\ Wenn tadr nicht im Codefile liegt, Filebuf mit $FF fÅllen. 
+: ReadFileCode   ( tadr -- )
+     2dup CodefileLÑnge d>
+     if   2drop Filebuf 16 $FF fill
+     else InCodefile drop
+          cs: Filebuf 16 Codefile read drop  
+     then  ; 
+
+Word: @FileCode
+
+\ 16 Bytes ab tadr in Programm lesen. 
+: @FileCode   ( tadr -- )
+     fpc? zCode? 0= and if $10000. d+ then  ReadFilecode  ; 
+

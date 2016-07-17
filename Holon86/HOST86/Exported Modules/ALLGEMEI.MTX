@@ -1,0 +1,755 @@
+Module: Allgemein
+
+Group: Files
+
+Word: Progname
+
+12 Stringbuf Progname 
+
+Word: $exe
+
+$4558 $452E double $exe 
+
+Word: GetEXE
+
+\ Im Environment nach EXE suchen. 1KB scheint nicht zu langen. 
+\ 98q: 12KB, es gibt keinen Grund hier eng zu begrenzen. 
+: GetEXE     ( seg off1 -- seg off2 )
+     12000 0                            \ >1k Environment  4.301 98q
+     do   1+ 2dup 2@l $exe d=           \ '.EXE' suchen
+          if leave then  
+     loop  ; 
+
+Word: GetName
+
+\ seg off zeigt auf '.' 
+: GetName    ( seg off1 -- seg off2 n )
+     dup -rot                           ( off seg off -- )
+     10 0                               \ 4.710
+     do   1- 2dup c@l [char] \ =        \ Anfang von Name suchen
+          if leave then 
+     loop                               ( off1 seg off2 -- )
+     rot over - 1- ;                    \ L„nge ohne Extension 
+
+Word: GetProgName
+
+\ 175 .EXE kann vorkommen als PATHEXT. Dann kein Name davor. Ignorieren. 
+: GetProgName
+     cs: $2C @l 0    ( seg off -- )    \ Anfang Environment
+     5 0
+     do   GetEXE  GetName               \ richtiges .EXE?   4.710     
+          dup 9 <                       \ "\" gefunden
+          if   leave                    \ seg off n = name
+          else drop 10 +                \ Zeiger hinter .EXE
+          then
+     loop
+     Progname c! 
+     1+ cs: Progname countl movel  ; 
+
+Word: Struktur$
+
+\ Name des Strukturfiles, wird aus Progname gebildet 
+" ENTWICKL.STR" String Struktur$ 
+
+Word: Textfile$
+
+" ENTWICKL.TEX" String Textfile$ 
+
+Word: STR-Back$
+
+" ENTWICKL.SBK" String STR-Back$ 
+
+Word: TEX-Back$
+
+" ENTWICKL.TBK" String TEX-Back$ 
+
+Word: Codefile$
+
+\ Name des Codefiles 
+" THEHOLON.COD" String Codefile$ 
+
+Word: Logfile$
+
+\ Name des Codefiles 
+" THEHOLON.LOG" String Logfile$ 
+
+Word: GetFileNamen
+
+: GetFileNamen
+     GetProgName
+     Progname put Struktur$  " .STR" add Struktur$
+     ProgName put Textfile$  " .TEX" add Textfile$       
+     ProgName put STR-Back$  " .SBK" add STR-Back$       
+     ProgName put TEX-Back$  " .TBK" add TEX-Back$       
+     Progname put Codefile$  " .COD" add Codefile$
+     Progname put Logfile$   " .LOG" add Logfile$  ; 
+
+Word: HelpStruktur$
+
+" HOLONHLP.STR" String HelpStruktur$ 
+
+Word: HelpTextfile$
+
+" HOLONHLP.TEX" String HelpTextfile$ 
+
+Group: Modus
+
+ Der Zustand des Programms ist definiert durch die Zustandvariable
+ Modus. Wir unterscheiden:
+ - die Browsermodi Modul, Gruppe, Wort und Edit
+ - die Testmodi Test, Debug und Show
+ - den Infomodus Info fr Infoscreen und Manual
+ - den Druckmodus Printer 
+
+Word: Modus
+
+\ Zustandsvariable 
+0 integer Modus 
+
+Word: WorkModus
+
+\ Vom aktuellen Modus aus kann ein Hilfsmodus gerufen werden, der also
+\ den Modus umsetzt. Der aktuelle Modus wird als Workmodus festgehalten
+\ fr die Rckkehr. 
+0 integer WorkModus 
+
+Word: CallModus
+
+\ Der Modus, der den Editor u.a. ruft. Der Editor muss wissen, aus
+\ welchem Modus er gerufen wird, n„mlich ob der Text zu einem Wort oder
+\ zu einem Modul oder einer Gruppe geh”rt. 
+0 integer CallModus 
+
+Word: HelpModus
+
+\ Speichert den Browsermodus, in dem Help verlassen wird. 
+1 integer HelpModus 
+
+Word: %Ende
+
+\ -- Die verschiedenen Werte von Modus: -- 
+0 constant %Ende 
+
+Word: %Modul
+
+1 constant %Modul 
+
+Word: %Gruppe
+
+2 constant %Gruppe 
+
+Word: %Wort
+
+3 constant %Wort 
+
+Word: %Edit
+
+4 constant %Edit 
+
+Word: %Test
+
+5 constant %Test 
+
+Word: %Debug
+
+6 constant %Debug 
+
+Word: %Printer
+
+7 constant %Printer 
+
+Word: %Show
+
+8 constant %Show 
+
+Word: %Info
+
+9 constant %Info 
+
+Word: Wort?
+
+\ true im Wortmodus. 
+: Wort?   ( -- f )
+     Modus %Wort =  ; 
+
+Word: ModGrp?
+
+\ Ist Modus Modul oder Gruppe. Besser als Wort? 0=. 
+: ModGrp?   ( -- f )   
+     Modus %Wort <  ; 
+
+Word: Gruppe?
+
+\ true im Gruppemodus. 
+: Gruppe?   ( -- f )
+     Modus %Gruppe =  ; 
+
+Word: Modul?
+
+\ true im Modulmodus. 
+: Modul?   ( -- f )
+     Modus %Modul =  ; 
+
+Word: Edit?
+
+\ true im Editmodus. 
+: Edit?   ( -- f )
+     Modus %Edit =  ; 
+
+Word: Info?
+
+\ true im InfoModus. 
+: Info?   ( -- f )
+     Modus %Info =  ; 
+
+Word: Show?
+
+\ true im Showmode. 
+: Show?   ( -- f )
+     Modus %Show =  ; 
+
+Word: Debug?
+
+\ true im Debug-Mode. 
+: Debug?   ( -- f )
+     Modus %Debug =  ; 
+
+Word: Test?
+
+\ true im Testmode. 
+: Test?   ( -- f )
+     Modus %Test =  ; 
+
+Group: Varianten
+
+Word: Profi?
+
+\ true fr Developer Version. 
+Flag Profi?   ( -- f ) 
+
+Word: Personal?
+
+\ true fr Personal Version. 
+Flag Personal?                                         \ 4.307 
+
+Group: Flags
+
+Word: Load?
+
+Flag Load? 
+
+Word: LoadAll?
+
+Flag LoadAll? 
+
+Word: LoadSelected?
+
+Flag LoadSelected? 
+
+Word: Basis?
+
+Flag Basis? 
+
+Word: Find?
+
+\ true im Find-Mode 
+Flag Find? 
+
+Word: searching?
+
+\ true im Search-Mode 
+Flag searching? 
+
+Word: PSeq?
+
+\ true bei Eingabe in PrinterSetup 
+Flag PSeq? 
+
+Word: Ende?
+
+\ true bei Ende von Eingabe, und am Ende der Struktur beim Bewegen im
+\ Browser. 
+Flag Ende? 
+
+Word: Assembler?
+
+Flag Assembler? 
+
+Word: Target?
+
+\ true if compiling target code. 
+Flag Target? 
+
+Word: ungeladen?
+
+Flag ungeladen? 
+
+Word: Monitor?
+
+Flag Monitor? 
+
+Word: Help?
+
+\ True, wenn wir im Helpmodus (Online Manual) sind. 
+Flag Help? 
+
+Word: NoHelp?
+
+\ True, wenn Helpfiles nicht vorhanden sind. 
+Flag NoHelp? 
+
+Word: micro?
+
+Flag micro? 
+
+Word: macro?
+
+: macro?   ( -- f )
+     micro? 0=  ; 
+
+Word: NoStack?
+
+\ Wenn true, kein Stackfenster. 6ab-1 
+Flag NoStack? 
+
+Word: TargetLeer?
+
+\ True, wenn Target neu gestartet und noch kein Code geladen ist.
+\ Verwendet von ?Download, gel”scht von ?NeuesProgramm, gesetzt von
+\ ProgrammEinrichten und NewTarget/86.
+\ 6au-2 
+Flag TargetLeer? 
+
+Word: OldModul
+
+0 integer OldModul 
+
+Word: OldGruppe
+
+0 integer OldGruppe 
+
+Word: OldModus
+
+0 integer OldModus 
+
+Word: Bytes?
+
+\ True, wenn die Anzahl Bytes im Datenstack im Target ungerade ist
+\ (m”glich bei 8Bit Prozessoren beim Codedebug). 
+Flag Bytes? 
+
+Word: NeueVersion?
+
+Flag NeueVersion? 
+
+Group: Tasten
+
+Word: 'Tab
+
+9 constant 'Tab 
+
+Word: 'LF
+
+10 constant 'LF 
+
+Word: 'Esc
+
+27 constant 'Esc 
+
+Word: ^C
+
+3 constant ^C 
+
+Word: ^P
+
+16 constant ^P 
+
+Word: ^T
+
+20 constant ^T 
+
+Word: ^Y
+
+25 constant ^Y 
+
+Word: F1
+
+59 constant F1 
+
+Word: F2
+
+60 constant F2 
+
+Word: F3
+
+61 constant F3 
+
+Word: F4
+
+62 constant F4 
+
+Word: F5
+
+63 constant F5 
+
+Word: F6
+
+64 constant F6 
+
+Word: F7
+
+65 constant F7 
+
+Word: F8
+
+66 constant F8 
+
+Word: sftF3
+
+86 constant sftF3 
+
+Word: sftF4
+
+87 constant sftF4 
+
+Word: ^F1
+
+94 constant ^F1 
+
+Word: ^F2
+
+95 constant ^F2 
+
+Word: ^F3
+
+96 constant ^F3 
+
+Word: ^F4
+
+97 constant ^F4 
+
+Word: ^F5
+
+98 constant ^F5 
+
+Word: ^F6
+
+99 constant ^F6 
+
+Word: ^F7
+
+100 constant ^F7 
+
+Word: ^F8
+
+101 constant ^F8 
+
+Word: altF1
+
+104 constant altF1 
+
+Word: altF2
+
+105 constant altF2 
+
+Word: altF3
+
+106 constant altF3 
+
+Word: altF4
+
+107 constant altF4 
+
+Word: altF5
+
+108 constant altF5 
+
+Word: altF6
+
+109 constant altF6 
+
+Word: altF7
+
+110 constant altF7 
+
+Word: altF8
+
+111 constant altF8 
+
+Word: 'Home
+
+71 constant 'Home 
+
+Word: 'Up
+
+72 constant 'Up 
+
+Word: 'PgUp
+
+73 constant 'PgUp 
+
+Word: 'Left
+
+75 constant 'Left 
+
+Word: 'Right
+
+77 constant 'Right 
+
+Word: 'End
+
+79 constant 'End 
+
+Word: 'Down
+
+80 constant 'Down 
+
+Word: 'PgDn
+
+81 constant 'PgDn 
+
+Word: 'Ins
+
+82 constant 'Ins 
+
+Word: 'Del
+
+83 constant 'Del 
+
+Word: ^Left
+
+115 constant ^Left 
+
+Word: ^Right
+
+116 constant ^Right 
+
+Word: ^End
+
+117 constant ^End 
+
+Word: ^PgDn
+
+118 constant ^PgDn 
+
+Word: ^Home
+
+119 constant ^Home 
+
+Word: ^PgUp
+
+132 constant ^PgUp 
+
+Group: Spezialtasten
+
+Word: fkey?
+
+\ Als Ersatz fr key? in Befehlsroutine, fr kontinuierliches Zyklen.
+\ Liefert 0 0 wenn keine Taste gedrckt. 
+: fkey?   ( -- c | func 0 | 0 0 )
+     key? if key else 0 0 then  ; 
+
+Word: ?key
+
+\ Liefert char oder false. F8 wird in Esc gewandelt, als Exit von
+\ laufender Routine (Menu gel”scht). 
+: ?key   ( -- c | 0 )
+     key?               
+     if   key ?dup 0=                   \ Funktionstaste?
+          if   dup F8 = if drop 'Esc then
+          then  
+     else false
+     then  ; 
+
+Word: ckeys
+
+\ Bit 0..7 = sftrechts,sftlinks,ctl,alt,scroll,num,caps,inserton 
+: ckeys   ( -- 4b )
+     $40 $17 c@l 15 and  ; 
+
+Word: Sft?
+
+\ Eine Shift-Taste gedrckt? 
+: Sft?   ( -- f )
+     ckeys 3 and  ; 
+
+Word: Ctl?
+
+\ Eine Control-Taste gedrckt? 
+: Ctl?   ( -- f )
+     ckeys 4 and  ; 
+
+Word: Alt?
+
+\ Alt-Taste gedrckt? 
+: Alt?   ( -- f )
+     ckeys 8 and  ; 
+
+Word: Esc?
+
+\ true wenn Esc gedrckt. 
+: Esc?   ( -- f )
+     Key? dup if drop GetKey 'Esc = then  ;   \ 4.114 
+
+Word: OldKey
+
+\ Vorhergehende Taste, fr die Kontrolle von wiederholten Aktionen. 
+0 integer OldKey 
+
+Word: NewKey
+
+\ Aktuelle Taste. 
+0 integer NewKey 
+
+Group: Menu
+
+Word: SetCursor
+
+\ Cursor in Menuzeile an i-tes Feld setzen, auch Feldnummer schreiben. 
+: SetCursor   ( i=1..8 -- )
+     dup 1- 10 * 24 xy
+     48 + emit  ; 
+
+Word: doFeld
+
+\ Gespeicherten Text in Feld i schreiben. Wenn 8 Zeichen, direkt an
+\ Feldnummer anschliessen, sonst Leerzeichen. Das 8-te Feld darf nicht
+\ bis auf Position 79 gehen, da sonst BIOS eine Zeile scrollt. 
+: doFeld   ( i -- )
+     dup SetCursor inverse space
+     <<,">> dup c@ >r "type
+     8 < if 8 else 7 then r> - 0 max   \ das 8. Feld nur 7+1 breit.
+     spaces normal  ; 
+
+Word: Feld"
+
+\ Compiles the following text ended by ", types the text at runtime 
+Compiler: Feld"   ( text" / )
+    Intp: NoIntp  ;
+    Comp: Code,  Here compile,  ,"  ;
+    Code: doFeld 
+
+Word: ClrFelder
+
+\ L”scht Menufelder n1 bis n2 
+: ClrFelder   ( n1 n2 -- )
+     1+ swap do i Feld" " loop  ; 
+
+Word: HelpFeld
+
+: HelpFeld   ( i -- )
+     Help? 
+     if   Edit? if Feld" " else Feld" About" then      \ 4.119
+     else Feld" Help" 
+     then  ; 
+
+Word: NormMenu
+
+Doer NormMenu 
+
+Group: Vocabularies
+
+Word: Assembler
+
+Vocabulary Assembler 
+
+Word: Meta
+
+Vocabulary Meta 
+
+Word: Voc:=Meta
+
+( Voc:=Meta )
+     Meta 
+
+Group: Diverses
+
+Word: ?Exit
+
+\ Exits current word if f is true 
+Code ?Exit   ( f -- )
+     pop ax  or ax, ax  0= if  next  then  
+     jmp ' exit 
+
+Word: Paragraphs
+
+\ Offset n1 in Anzahl belegter Paragraphen n2 umrechnen. 
+: Paragraphs   ( n1 -- n2 )
+     15 + 0 16 um/  ; 
+
+Word: d.####
+
+: d.####   ( d -- )
+     <# # # # # #> type  ; 
+
+Word: .####
+
+: .####   ( n -- )
+     0 d.####  ; 
+
+Word: Fertig?
+
+: Fertig?   ( -- f )
+     Ende? Esc? or  ; 
+
+Word: ?Edit
+
+\ Schaltet auf Editieren und speichert aktuellen Modus. Auch Modul- und
+\ Gruppentexte editieren, Callmodus neu. Kein Edit in Makroview. 
+: ?Edit
+     macro? ?exit                                 \ 4.073 4.149
+     Modus is CallModus  %Edit is Modus  ; 
+
+Word: Alarm
+
+\ Fr jedes fehlenede Stackelement einmal beepen. 
+: Alarm
+     sp@ spBase - 2/ 0 ?do 7 emit loop  ;                   \ 4.143 
+
+Word: CheckDepth
+
+\ spBase verwenden. 4.143 
+: CheckDepth
+      sp@ spBase > if ( Alarm ) !sp then  ;                     \ 4.143 
+
+Group: Target Modelle
+
+Die verschiedenen Targetplattformen unterscheiden sich wahrscheinlich
+nur wenig in den Speichermodellen. Bisher haben wir:
+- FPC = paged: CPU Code in 64K Segment und Listcode in Pages, Daten
+gemischt mit Code.
+- /FPC: Aller Code und Daten im 64K Speicherraum (16Bit Adtressierung) 
+
+Word: fpc?
+
+\ true, wenn Targetmodell = F-PC, Forth-Listcode in Pages. 
+Doer fpc? 
+
+Word: 32?
+
+\ true in 32 Bit Targetsystemen. 
+Doer 32? 
+
+Word: DefaultModell
+
+( DefaultModell )
+     make fpc? false
+     make 32? false 
+
+Word: 16?
+
+: 16?   ( -- f )
+     32? 0=  ; 
+
+Word: ?>16
+
+\ In einem 16 Bit Zielsystem 16 Bit Argument liefern. 
+: ?>16   ( d -- w / d )
+     16? if drop then  ; 
+
+Word: ?>32
+
+\ In 16 Bit System das Argument auf 32 Bit erweitern vorzeichenlos. 
+: ?>32   ( w / d -- d )
+     16? if 0 then  ; 
+

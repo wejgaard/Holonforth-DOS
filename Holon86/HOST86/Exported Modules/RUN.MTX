@@ -1,0 +1,1368 @@
+Module: Run
+
+Group: Ctl-Actions
+
+Word: TestMode
+
+: TestMode
+     Micro? 0= ?exit  Modus is CallModus  %Test is Modus  ?Update  ; 
+
+Word: Wort>Edit
+
+\ Betont vom Wortmodus zum Editor Åbergehen. 4.017 
+: Wort>Edit
+     %Wort is Callmodus  %Edit is Modus  ; 
+
+Word: ?Error>Edit
+
+\ Wird nach einem Fehler ferufen, bei Eingabe von Enter wird der Editor
+\ gerufen. 74l Callmodus = %Wort. 4.017 
+: ?Error>Edit
+     tryError? MsgKey 13 = and
+     if   Wort>Edit                     \ 4.017
+          Aktivwort is Oldwort          \ kein @Wort, DefCur erhalten
+          WorteZeigen                   \ Balken lîschen
+     else Neuzeigen  .Stack
+     then ; 
+
+Word: doLoadAll
+
+: doLoadAll
+     ?Update  0 is MsgKey  LoadAll  ?Error>Edit  ; 
+
+Word: Refresh
+
+\ Wird nur in Ctl-Menu gerufen, hat dabei zwei zusÑtzliche Menuwerte auf
+\ dem Stack. Da der Stack gedruckt wird in UpBild, Werte wegnehmen. 
+: Refresh
+     MikroBild 2>r UpBild 2r>  ; 
+
+Word: mlist
+
+\ Vokabular listen mit Platzkontrolle am Zeilenende. 65e 33-24 
+: mlist
+     Context 
+     begin     @ dup
+     while     dup 2+ count 
+               77 #out - over < if cr then
+               type 2 spaces
+     repeat  drop  ; 
+
+Word: .Meta
+
+\ Metaworte zeigen. 65e 33-24 
+: .Meta
+     SaveScreen page ." Host words available for compiler:" cr cr
+     meta mlist  cr cr 
+     ." (press a key)"  key ?dup 2drop  Restorescreen  ; 
+
+Word: .Assembler
+
+\ Assemblerworte zeigen. 65t 33-31 
+: .Assembler
+     SaveScreen page ." Words available for Assembler:" cr cr
+     Assembler mlist  cr cr 
+     ." (press a key)"  key ?dup 2drop  Restorescreen  ; 
+
+Word: +CtlFunc
+
+Doer +CtlFunc 
+
+Word: DoStrukturListe
+
+\ Anpassung an Modul- und Gruppentext-Modi. 4.011 4.065 
+: DoStrukturListe
+     WortDisplay Strukturliste ModGrp? if mgDisplay then Neuzeigen  ; 
+
+Word: ?Enter>Edit
+
+\ Bei Enter eventuell neues Wort einsetzen und/oder Text editieren. 4.017
+\ 4.074 Bei leerer Gruppe nichts zu editieren. 
+: ?Enter>Edit
+     Wort? KeineWorte? and 
+     if clear Kopie? try NeuesWort tryError? ?exit then
+     Gruppe? KeineGruppen? and ?exit                        \ 4.074
+     ?Edit  ; 
+
+Word: EndSession?
+
+: EndSession?   ( -- f )
+     " Do you want to end this session? (Y/N) " Yes?  ; 
+
+Word: TabFunc
+
+Doer TabFunc 
+
+Word: Makro
+
+: Makro
+     MakroBild NormMenu Neuzeigen  ; 
+
+Word: Mikro
+
+: Mikro
+     MikroBild UpBild  ; 
+
+Group: Ctl-Menus
+
+Word: +CtlMenu
+
+Doer +CtlMenu 
+
+Word: TheCtlMenu
+
+\ Felder 5..7 sind targetspezifisch. InitCode 34-6 
+: TheCtlMenu
+     macro? Help? or ?exit
+     1 Feld" Help"
+     2 Feld" InitCode"
+     3 Feld" LoadAll"
+     4 Feld" Test"
+     +CtlMenu
+     8 Feld" TheEnd"  ; 
+
+Word: +CtlSftMenu
+
+Doer +CtlSftMenu 
+
+Word: TheCtlSftMenu
+
+\ Felder 6..8 sind targetspezifisch. 35-7 35-8 
+: TheCtlSftMenu
+     macro? Help? or ?exit
+     1 Feld" Help"
+     2 Feld" About"
+     3 Feld" System" 
+     4 Feld" Printer"
+     +CtlSftMenu  
+     ; 
+
+Word: +CtlSftFunc
+
+Doer +CtlSftFunc 
+
+Group: Systembefehle
+
+Word: CharCase?
+
+\ Liefert true wenn c einem Befehl entspricht, der hier ausgefÅhrt wird.
+\ Manualtext immer zugÑnglich. 
+: CharCase?   ( c c -- c f )
+     true swap 
+     case
+     ^C of EndSession? if %Ende is Modus then endof     
+     'cr of  Find? if StopFind else micro? if sft? if Testmode else
+             ?Enter>Edit then then then endof   \ 4.017
+     'tab of TabFunc endof
+     'esc of Find? if StopFind else macro? if Refresh else Help? 
+             if EndHelp else sft? if Testmode then then then then
+             endof
+     2drop false endcase  ; 
+
+Word: UnSftCase?
+
+\ Die Ctl-Funktionen. F5-F7 sind targetabhÑngig. 
+: UnSftCase?   ( c true c -- c f )
+     case
+     ^F1 of " Ctl+F2=Init" Info endof        \ 4.096 4.136
+     ^F2 of ClearCode !sp 0 true NeuZeigen endof
+     ^F3 of 2>r ClrMenu doLoadAll 2r> endof  \ Stack freihalten w.C.
+     ^F4 of TestMode endof
+     ^F8 of Help? 0= if Modus is Workmodus %Ende is Modus then endof
+     31 ( alt+S) of DoStrukturliste endof  \ 4.011
+     19 ( alt+R) of InitY234 Refresh endof
+     30 ( alt+A) of .Assembler endof
+     35 ( alt+H) of .Meta endof
+     -rot 2>r ?Stackbefehl 2r> rot
+     +CtlFunc endcase  ; 
+
+Word: SftCase?
+
+\ Die Ctl+Sft-Funktionen. F6-F8 sind targetabhÑngig. 
+: SftCase?   ( c true c -- c f )
+     case
+     ^F1 of " Ctl+Sft+F2" Info endof          \ 4.096 4.136
+     ^F2 of About endof
+     ^F3 of 2>r SystemSetup 2r> endof
+     ^F4 of Modus is OldModus %Printer is Modus endof
+     +CtlSftFunc endcase  ; 
+
+Word: CtlFuncCase?
+
+: CtlFuncCase?   ( c c -- c f )
+     true swap sft?
+     if   SftCase?
+     else UnSftCase?
+     then  ; 
+
+Word: ?View
+
+\ View umschalten nur, wenn in anderem View (kein unnîtiges Flattern)
+\ Wenn Taste '-' in Micro schaltet, 127 liefern, Stackeingabe meiden.
+\ Auch mit '.' in Macro. 
+\ 4.059 Mit + trotz QFind in Makro. 
+: ?View   ( c1 -- c2 )
+     case
+     ascii + of Find? 
+                if   QName? 0= if StopFind Makro then
+                else Micro? if Makro then 
+                then ascii + endof  
+     ascii . of Find? 0= Micro? and if Makro then ascii . endof  
+     ascii - of Find? 0= Micro? 0= and if Mikro 127 else ascii - then
+                endof 
+     endcase  ; 
+
+Word: MenuKey
+
+: MenuKey   ( -- c | func 0 )
+     GetMenukey ?dup
+     if   dup CharCase? 
+          if   StopFind drop 127
+          else ?View 
+          then
+     else micro? Help? 0= and if dup CtlFuncCase? else false then
+          if drop 0 0 else 0 then
+     then  ; 
+
+Group: Common
+
+Dies sind die Befehle, die in allen Listenmodi verfÅgbar sind: Find,
+Code, Prev, Next.
+Die Befehle sind auch verfÅgbar, wenn Modul und Gruppe leer sind. Die
+Routinen testen selbst auf leere EintrÑge. 
+Ausnahmen: Gruppenmodus aber noch keine Gruppe, und Wortmodus aber noch
+kein Wort. Hier soll der Benutzer sich erst mal auf den Eintrag
+konzentrieren. 
+
+Word: CommonMenu
+
+\ Gemeinsamer Teil fÅr alle BrowserzustÑnde. 
+: CommonMenu
+     5 Feld" Find"
+     6 Help? if Feld" " else Feld" Code" then
+     7 Help? if Feld" Last" else Feld" Prev" then      \ 4.160
+     8 Help? if Feld" Exit" else Feld" Next" then  ;   \ 4.025 
+
+Word: CommonCases
+
+: CommonCases   ( c -- c | 0 )
+     macro? ?exit
+     case
+     F5 of ClrMenu try doFind gefunden?  
+           help? profi? 0= and 0= and if ?Edit then endof   \ 4.219
+     F6 of Help? 0= 
+           if Modus is Callmodus %Show is Modus then endof  
+     F7 of Help? if Helpwort ?dup if Gowort then            
+                                  else PrevWord then endof  
+     F8 of Help? if EndHelp else LaterWord then endof       
+     exit endcase 0  ; 
+
+Group: Module
+
+Word: DemoHelp?
+
+: DemoHelp?   ( -- f )
+     Profi? 0= Help? and  ;                                 \ 4.219 
+
+Word: EditModul
+
+\ Wenn der Name existiert, wird er geÑndert, sonst handelt es sich um ein
+\ neues Modul. TÑtigkeit geloggt. 
+: EditModul
+     AktivModul EName$ c@
+     if " changed:  " else " new:  " then Log
+     ModuleZeigen ClrMenu micro? if 2 Feld" Text" then \ 4.030 4.073
+     AktivModul EditEintrag sUpdate .mgText   \ 4.014
+     AktivModul EName$ log$  ; 
+
+Word: NeuesModul
+
+: NeuesModul
+     false is vor? ,Eintrag dup KeineModule?
+     if   Modulanker InsertEintrag1
+     else AktivModul InsertEintrag
+     then is AktivModul .Module 
+     EditModul  ; 
+
+Word: DoLoadModul
+
+\ FÅr das Laden in den Wortmodus gehen, nachher zurÅck zum Modulmodus. 
+\ Display umsetzen nicht nîtig, machen .Text-Worte. 4.029 
+: DoLoadModul
+     ClrMenu %Wort is Modus ModuleZeigen 
+     LoadModul %Modul is Modus ; 
+
+Word: Delete?
+
+\ Del mit, Sft+Del ohne Kontrollfrage. 
+: Delete?   ( eintrag -- )
+     sft? 
+     if   drop true
+     else SaveScreen " Delete: " EMeldung ."  Y/N?"  y/n? 
+          RestoreScreen
+     then  ; 
+
+Word: ?DeleteModul
+
+: ?DeleteModul
+     AktivModul delete? 
+     if ClrMenu DeleteModul hash ModulFenster wipe then  ; 
+
+Word: ModulMenu
+
+: ModulMenu
+     1 HelpFeld
+     2 DemoHelp? 0=
+     if   Module? if Feld" Edit" else Feld" New" exit then  \ 4.012
+     else Feld" " 
+     then
+     4 KeineWorte? if Feld" " else Feld" Print" then
+     macro? if 3 Feld" " 5 7 ClrFelder 8 Feld" Exit" exit then
+     3 Help? if Feld" " else Feld" Load" then         \ 4.012 4.029
+     CommonMenu  ; 
+
+Word: AltModulMenu
+
+: AltModulMenu
+     1 HelpFeld    
+     2 DemoHelp? if Feld" " else Feld" New" then
+     3 8 ClrFelder 
+     help? KeineModule? or macro? or ?exit 
+     3 Feld" Import"
+     5 Feld" ImpText"
+     7 Help? if Feld" " else Feld" +Com" then 
+     8 Help? if Feld" " else Feld" -Com" then
+     KeineWorte? ?exit
+     4 Feld" Export"
+     6 Feld" ExpText"
+     ; 
+
+Word: ModCharCases
+
+\ [ 4.060 Bisheriger Case '48' ist obsolet.] 
+: ModCharCases   ( c -- )
+     ?QFind  ; 
+
+Word: ModulCases1
+
+: ModulCases1   ( c -- c | 0 )
+     case
+     'Home of Modulanker first is AktivModul endof
+     'End of Modulanker last is AktivModul endof
+     ^Home of ProgrammAnfang endof
+     ^End of ProgrammEnde endof
+     'Up of -Modul endof
+     'Down of +Modul endof
+     'PgUp of 4 0 do -Modul loop endof
+     'PgDn of 4 0 do +Modul loop endof
+     23 ( Alt+I) of DelModListe hash endof                    \ 4.071
+     exit endcase 0  ; 
+
+Word: ModulCases2
+
+\ Bei Demo? keine Eingriffe ins Helpfile. 
+: ModulCases2   ( c -- c | 0 )
+     case
+     'Left of Module? Gruppen? and if %Wort is Modus then endof
+     'Right of Module? if %Gruppe is Modus then endof
+     F1 of Help? if About else " F2=Edit(M" Info then endof   \ 4.136
+     DemoHelp? ?exit
+     'Ins of sft? 0= is Vor? ClrMenu InsertModul Hash NeuZeigen endof
+     F2 of Module? if EditModul else try NeuesModul then endof \ 4.030
+     altF2 of ClrMenu try NeuesModul endof                    
+     help? macro? or ?exit
+     altF1 of " Alt+F2=New(M" Info endof                      \ 4.136
+     altF3 of ClrMenu ImportModul hash endof
+     exit endcase 0  ; 
+
+Word: ModulCases3
+
+: ModulCases3   ( c -- c | 0 )
+     case
+     DemoHelp? ?exit
+     'Del of ?DeleteModul endof        
+     help? macro? or ?exit
+     altF5 of ClrMenu ImportTextfile hash endof
+     KeineWorte? ?exit                                      \ 4.218
+     altF4 of ClrMenu ExportModul endof
+     altF6 of ClrMenu ExportTextfile endof
+     altF7 of Help? 0= if +ComFenster then endof  
+     altF8 of Help? 0= if -ComFenster then endof
+     exit endcase 0  ; 
+
+Word: ModulCases4
+
+: ModulCases4   ( c -- c | 0 )
+     case
+     F3 of Help? 0= micro? and 
+           if  DoLoadModul ?Error>Edit then endof  \ 4.029
+     F4 of SaveScreen ClrMenu PrintModul RestoreScreen endof
+  sftF4 of PrintModulfile endof                    \ 4.137
+     F8 of macro? if MikroBild Upbild then endof
+     drop endcase ; 
+
+Word: ModulRoutine
+
+: ModulRoutine
+     begin     MenuKey ?dup
+               if   ModCharCases
+               else StopFind 
+                    ModulCases1 ModulCases2
+                    Module? and ModulCases3
+                    CommonCases Worte? and ModulCases4
+               then Modus %Modul <> ?Exit 
+               InitMenu .Module CheckDepth
+     again  ; 
+
+Word: Module
+
+: Module
+     Module? 
+     if   make NormMenu ModulMenu  make AltMenu AltModulMenu
+          InitMenu CurOff .Module ModulRoutine
+     else 1 8 ClrFelder try NeuesModul                      \ 4.049
+     then  ; 
+
+Group: Gruppen
+
+Word: EditGruppe
+
+: EditGruppe
+     AktivGruppe EName$ c@
+     if " changed:  " else " new:  " then Log
+     Gruppenzeigen micro? if 2 Feld" Text" then        \ 4.030 4.073
+     AktivGruppe EditEintrag  .mgText                  \ 4.014
+     sUpdate  AktivGruppe EName$ log$  ; 
+
+Word: NeueGruppe
+
+: NeueGruppe
+     false is vor? GruppenEintrag .Gruppen EditGruppe  0 is OldWort  ; 
+
+Word: DoLoadGruppe
+
+\ Balken lîschen, zu Gruppemodus zurÅckkehren. 4.029 
+: DoLoadGruppe
+     ClrMenu %Wort is Modus GruppenZeigen 
+     LoadGruppe %Gruppe is Modus  ; 
+
+Word: ?DeleteGruppe
+
+: ?DeleteGruppe
+     AktivGruppe delete? 
+     if   ClrMenu DeleteGruppe hash GruppeFenster wipe 
+          WipeWords 
+     then  ; 
+
+Word: GruppenMenu
+
+: GruppenMenu
+     1 HelpFeld
+     2 DemoHelp? 0= 
+     if   Gruppen? if Feld" Edit" else Feld" New" 3 8 ClrFelder exit
+          then 
+     else Feld" "
+     then
+     4 KeineWorte? if Feld" " else Feld" Print" then 
+     macro? if 3 Feld" " 5 7 ClrFelder 8 Feld" Exit" exit then
+     3 KeineWorte? Help? or if Feld" " else Feld" Load" then
+     CommonMenu  ; 
+
+Word: AltGruppenMenu
+
+: AltGruppenMenu
+     1 Helpfeld
+     2 DemoHelp? if Feld" " else Feld" New" then
+     3 8 ClrFelder Help? macro? or ?exit 
+     7 Help? if Feld" " else Feld" +Com" then \ 4.024
+     8 Help? if Feld" " else Feld" -Com" then
+     KeineWorte? ?exit
+     5 Feld" Clear"  ; 
+
+Word: GrpCharCases
+
+\ [ 4.060 Bisheriger Case '48' ist obsolet.] 
+: GrpCharCases   ( c -- )
+     ?QFind  ; 
+
+Word: GrpCases1
+
+: GrpCases1   ( c -- c | 0 )
+     case
+     'Home of Gruppenanker first is AktivGruppe endof
+     'End of Gruppenanker last is AktivGruppe endof
+     ^Home of ProgrammAnfang endof
+     ^End of ProgrammEnde endof
+     'Up of -Gruppe endof
+     'Down of +Gruppe endof
+     'PgUp of 4 0 do -Gruppe ErsteGruppe? ?leave loop endof
+     'PgDn of 4 0 do +Gruppe LetzteGruppe? ?leave loop endof
+     exit endcase 0  ; 
+
+Word: GrpCases2
+
+: GrpCases2   ( c -- c | 0 )
+     case
+     'Left of %Modul is Modus GruppenZeigen endof           \ 4.011
+     F1 of Help? if About else " F2=Edit(G" Info then endof  \ 4.136
+     DemoHelp? ?exit
+     'Ins of ClrMenu sft? 0= is Vor? InsertGruppe Hash Neuzeigen endof
+     F2 of ClrMenu Gruppen? 
+                   if EditGruppe else try NeueGruppe then endof
+     altF2 of ClrMenu try NeueGruppe endof
+     Help? macro? or ?exit
+     altF1 of " Alt+F2=New(G" Info endof                     \ 4.136
+     exit endcase 0  ; 
+
+Word: GrpCases3
+
+: GrpCases3   ( c -- c | 0 )
+     case
+     'Right of %Wort is Modus endof
+     F4 of SaveScreen ClrMenu PrintGruppe RestoreScreen endof
+     F8 of macro? if MikroBild Upbild then endof
+     DemoHelp? ?exit
+     'Del of ?DeleteGruppe endof        \ 4.129
+     exit endcase 0  ; 
+
+Word: GrpCases4
+
+: GrpCases4   ( c -- )
+     macro? if drop exit then
+     case
+     F3 of Help? 0= if DoLoadGruppe ?Error>Edit then endof 
+     altF5 of AktivGruppe ClearGruppe AllesZeigen endof
+     altF7 of Help? 0= if +ComFenster then endof  \ 4.024
+     altF8 of Help? 0= if -ComFenster then endof
+     drop endcase ; 
+
+Word: GruppenRoutine
+
+: GruppenRoutine
+     begin     MenuKey ?dup
+               if   GrpCharCases
+               else StopFind 
+                    GrpCases1
+                    GrpCases2
+                    Gruppen? and CommonCases GrpCases3
+                    Worte? and GrpCases4
+               then Modus %Gruppe <> ?Exit 
+               InitMenu .Module CheckDepth
+     again  ; 
+
+Word: Gruppen
+
+: Gruppen
+     make NormMenu GruppenMenu  make AltMenu AltGruppenMenu
+     InitMenu CurOff .Module GruppenRoutine  ; 
+
+Group: Worte
+
+Word: DoWord
+
+\ Base nur senden bei interaktivem Run eines Wortes. / Im Targetcode ist
+\ jeder Leerraum mit dem Breakcode belegt. Daher sicher gehen, dass auch
+\ der Breakvector gesetzt ist. 
+: DoWord
+     SetErrorBreak SendBase
+     Aktivwort dup is Compwort  IntpFeld @s execute  
+     ReadBase  ; 
+
+Word: WortCode?
+
+\ Stimmt der Code des Wortes im Target mit dem Code im File Åberein?
+\ Erste zwei Bytes vergleichen. 
+: WortCode?   ( -- f )
+     zca @zf zca @zt =  ; 
+
+Word: MonCode?
+
+\ Ist das MonitorInterface im Target geladen? Hierzu den Code von RETURN
+\ kontrollieren. 
+: MonCode?   ( -- f )
+     tReturn @zf tReturn @zt =  ; 
+
+Word: ?LoadSelected
+
+: ?LoadSelected
+     Help? ?exit
+     WortMerken ClrMenu 
+     LoadSelected                                           \ 4.220
+     ?Error>Edit  ; 
+
+Word: Runable?
+
+: Runable?   ( -- f )
+     zca or AktivWort @CodelÑnge 0= 0= and  
+     Aktivwort geladen? and Monitor? and Micro? and  ; 
+
+Word: RunWord
+
+\ Targetcode kontrollieren, bei Neustart ev. nicht geladen. - 
+\ Eventuell auch Wort laden. 4.156 
+: RunWord
+     Monitor? 0= if " Sorry, target is offline" Kurzmeldung exit then
+     AktivWort geladen? 0= if false is Wortezeigen? ?LoadSelected then
+     Runable? 
+     if   WortCode? MonCode? and
+          if   SaveScreen try doWord RestoreScreen .Stack
+          else " Sorry, no code in target yet." Wartemeldung
+          then
+     then  ; 
+
+Word: ?Debug
+
+\ Wenn Wort nicht debugt werden kann, selbiges nett melden. 4.055 4.156 
+: ?Debug
+     Monitor? 0= if " Sorry, target is offline" Kurzmeldung exit then
+     AktivWort geladen? 0= if false is Wortezeigen? ?LoadSelected then
+     Runable?
+     if   %Debug is Modus
+     else " Sorry, can't debug -- wrong code."
+          Wartemeldung
+     then  ; 
+
+Word: DoNeuesWort
+
+\ [Callmodus=%Wort setzen per Wort>Edit.] 
+: DoNeuesWort
+     try NeuesWort tryError? ?exit Wort>Edit  ; 
+
+Word: WortMenu
+
+\ CommonCases lîschen wenn keine Worte. 
+: WortMenu
+     1 HelpFeld
+     macro? if 2 7 ClrFelder 8 Feld" Exit" exit then
+     2 DemoHelp? 0=
+     if   Worte? if Feld" Edit" else Feld" New" 3 8 ClrFelder exit then
+     else Feld" "
+     then
+     3 Help? if Feld" " else Feld" Load" then
+     4 Feld" Run"                                           \ 4.304
+     CommonMenu  ; 
+
+Word: AltWortMenu
+
+: AltWortMenu
+     macro? if 1 8 ClrFelder exit then
+     1 HelpFeld  
+     2 DemoHelp? if Feld" " else Feld" New" then
+     3 8 ClrFelder Help? KeineWorte? or ?exit 
+     3 Feld" Copy"
+     Runable? if 4 Feld" Debug" then
+     5 Feld" UsedBy"
+     6 Feld" AndBy"
+     7 Help? if Feld" " else Feld" +Com" then 
+     8 Help? if Feld" " else Feld" -Com" then
+     ; 
+
+Word: WortCharCases
+
+: WortCharCases   ( c -- )
+     case
+     ^P of SaveScreen ClrMenu PrintWort RestoreScreen endof
+     ?QFind endcase  ; 
+
+Word: WortCases1
+
+: WortCases1   ( c -- c | 0 )
+     case
+     'Home of HomeWord endof
+     'End of EndWord endof
+     ^Home of ProgrammAnfang endof
+     ^End of ProgrammEnde endof
+     'Up of -Wort endof
+     'Down of +Wort endof
+     'PgUp of PgUpWord endof
+     'PgDn of PgDnWord endof
+     exit endcase 0  ; 
+
+Word: WortCases2
+
+\ Bei demo? kein Eingriff ins Helpfile. 
+: WortCases2   ( c -- c | 0 )
+     case
+     'Left of %Gruppe is Modus WorteZeigen endof            \ 4.011
+     'Right of %Modul is Modus WorteZeigen endof            \ 4.011
+     F1 of Help? if About else " F2=Edit(W" Info then endof  \ 4.136
+     DemoHelp? ?exit
+     'Ins of sft? 0= is Vor? InsertWort Hash NeuZeigen endof
+     'Del of AktivWort delete? if DeleteWort hash then endof
+     macro? ?exit
+     F2 of Worte? if ?Edit else clear Kopie? DoNeuesWort then endof
+     altF2 of clear Kopie? DoNeuesWort endof
+     Help? ?exit
+     altF1 of " F2=New(W" Info endof                         \ 4.136
+     exit endcase 0  ; 
+
+Word: WortCases3
+
+: WortCases3   ( c -- c | 0 )
+     macro? if F8 = if Mikrobild Upbild then 0 exit then
+     case
+     F3 of true is Wortezeigen? ?LoadSelected endof     \ 4.123
+     sftF3 of false is Wortezeigen? ?LoadSelected endof \ 4.123
+     F4 of help? 0= if ClrMenu ?Update try RunWord then endof 
+                                                  \ 4.143 4.160
+     exit endcase 0  ; 
+
+Word: WortCases4
+
+: WortCases4   ( c -- )
+     Help? macro? or if drop exit then
+     case
+     altF3 of set Kopie? DoNeuesWort endof
+     altF4 of ClrMenu ?Debug endof                          \ 4.055
+     altF5 of ClrMenu WortMerken UsedBy endof
+     altF6 of ClrMenu AndBy endof                           \ 4.087
+     altF7 of Help? 0= if +ComFenster then endof
+     altF8 of Help? 0= if -ComFenster then endof
+     drop endcase ; 
+
+Word: WortRoutine
+
+: WortRoutine
+     InitMenu CurOff .Module
+     begin     MenuKey ?dup
+               if   WortCharCases
+               else StopFind 
+                    WortCases1
+                    WortCases2
+                    Worte? and CommonCases WortCases3 WortCases4
+               then Modus %Wort <> ?Exit 
+               .Module InitMenu  CheckDepth 
+     again  ; 
+
+Word: Worte
+
+\ [Falls bei Search nicht gefunden, gibt es noch eine Runde durch
+\ MainRoutine vor Einstieg in WortRoutine] Searchen in Editmodus, damit
+\ bei Wortezeugen (in Search) kein Wortbalken erscheint. Callmodus=%Wort. 
+: Worte
+     Searching?
+     if   Wort>Edit  Search gefunden?                       \ 4.017
+          if 0 is DefY0 else %Wort is Modus then
+     else make NormMenu WortMenu make AltMenu AltWortMenu 
+          WortRoutine
+     then  ; 
+
+Group: Edit
+
+Word: KeinWort?
+
+\ true, wenn Editor keinen Wort-Text bearbeitet (sondern Modul- oder
+\ Gruppentext). 
+: KeinWort?  ( -- f )
+     Callmodus %Wort <>  ; 
+
+Word: .EditCur
+
+: .EditCur
+     Def? if DefFenster else ComFenster then .Cur  ; 
+
+Word: -GWort
+
+\ Wort speichern und voriges Wort holen. Worttext gezielt einlesen,
+\ .Module liest keinen Text ein in Editormodus. 
+: -GWort
+     Def? SaveText -Wort .Module .wText
+     if >Definition else >Comment then  ; 
+
+Word: +GWort
+
+\ Wort speichern und folgendes Wort holen. 
+: +GWort
+     Def? SaveText +Wort .Module .wText
+     if >Definition else >Comment then  ; 
+
+Word: Restore
+
+\ Callmodus berÅcksichtigen. 
+: Restore
+     Callmodus %Wort = if .wText else .mgText then 
+     >Definition  ; 
+
+Word: NeuWort
+
+: NeuWort
+     SaveText try NeuesWort >Definition  ; 
+
+Word: Changed
+
+: Changed
+     Def? 0= Callmodus %Wort < or ?Exit   
+     ?Name                                                  \ 4.211
+     AktivWort geladen?  AktivWort dup ClrAlias ClrLadeflag
+     if Wortezeigen DefFenster .Cur then  ; 
+
+Word: ?SftMark
+
+: ?SftMark
+     sft? Marked? 0= and if SetMarked then  ; 
+
+Word: EditCharCases
+
+\ Esc zu Callmodus. 
+: EditCharCases   ( c -- )
+     case
+     'bsp of Backspace changed endof                        \ 4.211
+     'tab of Tab endof
+     'cr of InsCR endof
+     ^T of DelTextWort changed endof
+     ^Y of DelLine changed endof
+     'Esc of marked? not if Callmodus is Modus then QuitMarked endof
+     dup 31 > if InsChar changed else drop then endcase  ; 
+
+Word: EditMenu
+
+: EditMenu
+     1 HelpFeld
+     8 SubWord?  if Feld" GoBack" else Feld" Exit" then
+     KeinWort? if 2 7 Clrfelder 4 Feld" Mark" else  
+     2 Help?     if Feld" " else Feld" Def/Com" then
+     3 Help?     if Feld" " else Feld" Load" then
+     4 DemoHelp? if Feld" " else Feld" Name" then
+     5 DemoHelp? if Feld" " else Feld" Replace" then
+     6 DemoHelp? if Feld" " else Feld" FindOn" then 
+     7 Feld" GoLook" 
+     then .EditCur  ; 
+
+Word: AltEditMenu
+
+: AltEditMenu
+     DemoHelp? if ClrMenu 8 Feld" " CurOff exit then
+     KeinWort? if 1 8 ClrFelder 4 Feld" UnMark"   
+     else 1 HelpFeld
+          2 Feld" New"
+          3 Feld" Copy"
+          4 Feld" UnName"
+          5 Feld" Clear" 
+          6 Feld" Restore" 
+          7 Help? if Feld" " else Feld" +Com" then
+           8 Help? if Feld" " else Feld" -Com" then
+     then .EditCur  ; 
+
+Word: EditCases1
+
+\ Erlaubte Funktionen bei DemoHelp hier zusammengefasst. 
+: EditCases1   ( c -- c | 0 )
+     case
+     'Left of -Char endof
+     'Right of ?SftMark +Char endof
+     'Up of Auf endof
+     'Down of ?SftMark Ab endof
+     'PgUp of PageUp endof
+     'PgDn of ?SftMark PageDn endof
+     'Home of StartOfLine endof
+     'End of ?SftMark EndOfLine endof
+     F8 of GoBack? if Callmodus is Modus then EditMenu endof  
+     KeinWort? ?exit  \ 4.012
+     F7 of GoSub EditMenu endof
+     exit endcase 0  ; 
+
+Word: EditCases2
+
+: EditCases2   ( c -- c | 0 )
+     case
+     15 of -5 cur+ 5 DelInBuf endof     \ Sft+Tab     
+     'Del of Del changed endof    
+     'Ins of InsCut changed endof 
+     ^Left of -1Wort endof  
+     ^Right of ?SftMark +1Wort endof
+     ^End of ?SftMark End endof
+     ^Home of Home endof
+     KeinWort? ?exit  \ 4.012
+     ^PgUp of -GWort endof
+     ^PgDn of +GWort endof
+     exit endcase 0  ; 
+
+Word: EditCases3
+
+\ Nicht durchlaufen bei Help? Help im Kontext. 
+: EditCases3   ( c -- c | 0 )
+     case
+     F1    of " F2=Def" Info endof                     
+     KeinWort? ?exit                                   
+     altF1 of " Alt+F2=New(T" Info endof               
+     F2 of >Def/Com endof
+     F3 of true is Load? %Wort is Modus endof
+     altF7 of +ComFenster endof
+     altF8 of -ComFenster endof
+     exit endcase 0  ; 
+
+Word: EditCases4
+
+\ Bedingt durchlaufen, daher Zeichen zurÅckgeben. 
+: EditCases4   ( c -- c | 0 )
+     case
+     F4 of IstName changed endof     
+     altF4 of UnName changed endof   
+     altF5 of TextLîschen changed endof                     \ 4.214
+     altF6 of Restore changed endof                         \ 4.214
+     KeinWort? ?exit          
+     F5 of Replace changed endof
+     F6 of ( ClrMenu) FindOn gefunden? not 
+              if true is Searching? %Wort is Modus then endof
+     altF2 of clear Kopie? NeuWort endof
+     altF3 of set Kopie? NeuWort endof             
+     exit endcase 0  ; 
+
+Word: EditRoutine
+
+\ Manual in Demo nicht editierbar, aber Text zugaenglich. 
+: EditRoutine
+     begin     GetMenuKey ?dup
+               if   DemoHelp? 
+                    if   'Esc = if Callmodus is Modus then  
+                    else EditCharCases 
+                    then
+               else StopFind EditCases1 
+                    DemoHelp? 0= if EditCases2 EditCases4 then
+                    Help? 0= if EditCases3 then
+                    drop
+               then Modus %Edit <> ?Exit 
+               CurOn  
+               CheckDepth
+     again  ; 
+
+Word: InitEdit
+
+: InitEdit
+     make CtlMenu noop  make CtlSftMenu noop
+     make NormMenu EditMenu  make AltMenu AltEditMenu
+     Callmodus %Wort =  AktMarke Marke@ Aktivwort <> and 
+     if WortMerken then                          
+     ClrWortStack  Micro? if NoStackWindow then
+     .Module InitMenu >Definition -LPos  
+     TextZeilen Fensterhîhe 2- > if .Buffer then  
+     CurOn  " edited " Log  ; 
+
+Word: Editieren
+
+: Editieren
+     InitEdit Editroutine SaveText CurOff 
+     Help? 0= Info? 0= and NoStack? 0= and
+     if Stackwindow .Stack .TargetMonitor then
+     Load? if false is Load? ClrMenu LoadSelected ?Error>Edit then 
+     Wort? Help? 0= and if Showtext then  ;  \ TextAnfang zeigen 
+
+Group: Test
+
+Interpreter-Funktion mit Compilieren der Eingabe und AusfÅhren des
+compilierten Code. Dadurch kînnen auch Strukturen und Strings verwendet
+werden. DOCOLON und EXIT sind nicht nîtig, wir verwenden die
+Debugroutinen.
+
+Interpretieren von Target und Hostcode, d.h. auch interaktive Eingabe
+von Anweisungen an den Host sind mîglich. 
+
+Word: Tib$
+
+\ Buffer fÅr Textinputstring. 
+68 Stringbuf Tib$ 
+
+Word: Last$
+
+\ Buffer fÅr vorigen Textinputstring. 
+68 Stringbuf Last$ 
+
+Word: TestFenster
+
+: TestFenster
+     " TEST" WordTitel
+     y2 1+ istOben DefFenster        
+     >rahmen y3 Leerlinie normal  DefFenster wipe  ; 
+
+Word: TestXY
+
+0. double TestXY 
+
+Word: TestKey
+
+\ Cursor beibehalten Åber ?Monitor. 
+: TestKey   ( -- c | func 0 )
+     begin CurOff @wxy is TestXY ?monitor TestXY wxy CurOn
+           ?update key? 
+     until key  ; 
+
+Word: TargetMode?
+
+\ True, wenn der Zeileninterpreter auf das Target wirkt. 4.093 
+Flag TargetMode? 
+
+Word: TargetCode?
+
+: TargetCode?   ( -- f )
+     tRun @zf tRun @zt =  ; 
+
+Word: ?SetTargetmode
+
+\ FehlerzustÑnde erfassen. 
+: ?SetTargetmode
+     Monitor? 0=
+     if   ."   Sorry, target is offline" exit
+     else Targetcode? 0=
+          if ."   Sorry, no code loaded in target" exit then
+     then  set Targetmode?  ; 
+
+Word: TestExit
+
+\ Setzt Endbedingungen; lîscht Textpuffer, damit Interpreter nichts mehr
+\ tut. 4.093 77b 
+: TestExit
+     clear Tib$  set $Ende?  set Ende?  ; 
+
+Word: TestFunc
+
+\ Verabeitet Functionkeys, die in Editline nicht wirksam sind. 
+: TestFunc   ( c -- )
+     case
+          F1 of " F2=Recall" Info TestExit endof   \ 4.136
+          F2 of Last$ put Tib$ endof
+          F3 of ?SetTargetmode set $Ende? endof
+          F4 of clear Targetmode? set $Ende? endof
+          F8 of TestExit endof
+          swap >r ?Stackbefehl drop r>
+     endcase  ; 
+
+Word: InitTest
+
+\ Targetmode? bestimmen. 
+: InitTest
+     Workmodus %Test <>                 \ nicht von Help zurÅck? 4.093
+     if   clear Targetmode?  Monitor? 
+          if Targetcode? if set Targetmode? then then   \ 4.093  
+          SaveScreen  2 7 ClrFelder  
+          2 Feld" Recall"  3 Feld" Target" 4 Feld" Host" 8 Feld" Exit" 
+          .Module  clear Assembler?  0 is DeflÑnge  
+     then 
+     TestFenster  0 0 is TestXY 
+     make SpecialFunc TestFunc  make editkey testkey  ; 
+
+Word: TestEnde
+
+: TestEnde
+     Info? 0=                           \ nicht zu Help gehen?
+     if   y3 1+ istOben DefFenster  0 is WorkModus
+          RestoreScreen  Callmodus is Modus AllesZeigen 
+          .Targetmonitor                \ 4.118
+     then 
+     make SpecialFunc BrowserFunc  make editkey key  ;      \ 4.080 
+
+Word: Prompt
+
+\ Anzeigen, ob Target oder Host-Code ausgefÅhrt wird. 
+: Prompt
+     CurOff TestXY nip 0 swap 1+ dup Fensterhîhe 1- >
+     if wcorners 1 scrollup drop Fensterhîhe 1- then wxy 
+     TargetMode? if ." T> " else ." H> " then  \ 4.093
+     @wxy is TestXY .Stack TestXY wxy CurOn  ; 
+
+Word: addDefBuf
+
+\ String zu Text in DefBuf addieren. 
+: addDefBuf   ( "adr -- )
+     count DefBuf DefLÑnge + swap dup add DefLÑnge move  ; 
+
+Word: Query
+
+\ Befehlseingabe, zwei Leerzeichen zwischen Befehl und ev. Ausgabe, bei
+\ leerem Befehl bleibt vorherige Befehlszeile verfÅgbar. 
+: Query
+     " " put Tib$  edit Tib$  Tib$ c@
+     if  0 is DefLÑnge  Tib$ addDefBuf  Tib$ put Last$  then 
+     space space  ; 
+
+Word: TestCode
+
+\ Den Teststring compilieren als Colonwort (ohne Name). TestWortCode dann
+\ zu Target kopieren. DefCur dient als Zeiger auf Textanfang bei
+\ Textworten ( $" ." ) ColonStub bilden ohne NEST und UNNEST; starten mit
+\ GOCOLON, enden mit RETURN (wie in DebugStep). +: : und ; mÅssen nicht
+\ geladen sein. 
+: TestCode
+     zEnd is zStart  0 is zBytes  xEnd is xStart  0 is xBytes  
+     Def>Tib 0 is >in  set State  set Target?
+     begin     ParseWord  upcase Word$  >in is DefCur  Interpret
+               >in DeflÑnge 1- >
+     until  tReturn compile,  clear State
+     zSend xSend  ; 
+
+Word: TestExecute
+
+\ Die Executefunktion ist Targetsystem abhÑngig. 
+Doer TestExecute 
+
+Word: HostInterpret
+
+\ Direktes AusfÅhren der Befehlszeile. 4.093 
+: HostInterpret
+     Def>Tib  0 is >in  clear State  clear Target?
+     begin ParseWord  upcase Word$  >in is DefCur  
+           Interpret
+           >in DeflÑnge 1- >
+     until  clear State  ; 
+
+Word: InterpretLine
+
+\ Target- und Hostmodus unterscheiden. Monitor? berÅcksichtigen. 4.093 
+: InterpretLine
+     Tib$ c@                            
+     if   TargetMode?
+          if   Monitor?
+               if   SendBase TestCode TestExecute ReadBase 
+               else ." - Sorry, target is offline"
+               then
+          else HostInterpret            \ 4.093
+          then
+     then  ; 
+
+Word: Befehlszeile
+
+\ In Testmodus bleiben bei Fehlern. Modus bewusst verlassen. 
+: Befehlszeile
+     begin Prompt Query try InterpretLine Ende? until  ; 
+
+Word: TestModus
+
+: TestModus
+     InitTest false is Ende?  Befehlszeile  TestEnde  ; 
+
+Group: MainStart
+
+Word: ProjektEintrÑge
+
+\ Die Anzahl EintrÑge im aktuellen Projekt. 4.085 
+0 integer ProjektEintrÑge 
+
+Word: OldVideo
+
+\ Alten Videomode bei Programmende zurÅcksetzen. 
+0 integer OldVideo 
+
+Word: OldDivZero
+
+0. double OldDivZero 
+
+Word: SetUmgebung
+
+\ Die Programmumgebung definieren und alte Umgebung merken. 
+: SetUmgebung
+     TheMode is OldVideo  VideoMode Video  InitLines 
+     0 GetIntVec is OldDivZero  SetDivZero  SetCtlBrk  
+     SetSSTrap SetCEH  ; 
+
+Word: ?BackupProgramm
+
+: ?BackupProgramm
+     Profi? if BackupProgramm then  ; 
+
+Word: ?NeuesProgramm
+
+\ In leerem Rahmen fragen. [Textzeiger beginnt bei 1.] 
+: ?NeuesProgramm   ( -- )
+     CurOff " Create a new application? (Y/N)" yes? 
+     0= if page EndTry then
+     Textfile$ mkfile $41 over c!h close drop               
+     Struktur$ mkfile close drop
+     OpenProgStruktur NeueStruktur CloseProgStruktur
+     0 is Codefile NeuerCode  0. is Appl  ClrMarken         
+     %Modul is Workmodus clear TargetLeer? set NewCode?  ; 
+
+Word: ProgrammEinrichten
+
+\ Mit Try gerufen. Bei Exceptions hierin Abbruch des Programms. 
+\ NoHelp? hier init. Modus nach ?NeuesProgramm setzen. 
+: ProgrammEinrichten
+     set TargetLeer?                    \ ev. korr. in ?NeuesProgramm
+     Mikrobild 
+     GetFilenamen Struktur$ FileEx?  Textfile$ FileEx? and
+     if ?BackupProgramm else ?NeuesProgramm then 
+     Workmodus is Modus 
+     clear NoHelp? OpenStructure OpenText \ auf HLP-Files testen  
+     ?OpenCodefile OpenTarget  ;        \ îffnet Hostteil der Komm. 
+
+Word: ?ProjektAenderung
+
+\ Bei ProjektÑnderung (EXE und STR/TEX stimmen nicht Åberein), Code
+\ lîschen. Textmarken lîschen, damit PREV nicht ins Leere fÅhrt. 
+: ?ProjektAenderung
+     NeueVersion? ProjektEintrÑge AnzahlEintrÑge <> or        \ 4.203
+     if ClrMarken ClearCode clear TargetLeer? then  ;         \ 4.239 
+
+Word: InitEditor
+
+: InitEditor
+     DefBuf is tib  InitFind$  ClrKeyBuf  InitY234  CurOff 
+     1 is ComLÑnge Combuf 100 'bl fill  make "edit EditString  ; 
+
+Word: SetROMLimits
+
+\ UeberprÅft die eingestellten ROM Grenzen auf VertrÑglichkeit mit dem
+\ Target und der Variante (Test/Profi). 
+: SetROMLimits
+     zBegin ROMBaseXX is zBegin 
+     zLimit ROMTopXX is zLimit  ;                           \ 4.302 
+
+Word: ProgrammStarten
+
+: ProgrammStarten
+     ?ProjektAenderung 
+     InitEditor Meta decimal hash 
+     clear Help? Mikrobild UpBild  
+     ?Keyfile ?ReadParameter                                \ 4.223
+     SetROMLimits                                           \ 4.242
+     OpenLog " --- Start of Session ---" Log
+     false is Monitor?  ;                                   \ 4.239 
+
+Group: Main
+
+ 
+
+Word: MainRoutine
+
+\ Wenn diese Routine verlassen wird, ist das Programm zuende. Bei
+\ Modewechsel den Stack zeigen. 
+: MainRoutine  
+     begin     make CtlMenu theCtlMenu  make CtlSftMenu theCtlSftMenu
+               Modus case
+               %Modul of Module endof
+               %Gruppe of Gruppen endof
+               %Wort of Worte endof 
+               %Edit of Editieren endof
+               %Test of ?DoUpdate try TestModus endof    
+               %Debug of ?DoUpdate DebugRoutine endof
+               %Printer of PrinterSetup endof
+               %Show of ShowRoutine endof
+               %Info of ?DoUpdate InfoRoutine endof
+               %Ende of exit endof
+               drop endcase .Stack
+     again  ; 
+
+Word: ResetUmgebung
+
+\ DOS-Umgebung zurÅcksetzen. SS und Break werden von DOS umgesetzt. 4.051 
+: ResetUmgebung
+     OldDivZero 0 SetIntVec  OldVideo Video  ; 
+
+Word: ProgrammBeenden
+
+\ Das Programm speichern und Dateien schliessen. Host anschliessend
+\ gespeichert. 4.051 
+: ProgrammBeenden
+     " End of session, storing state of development" Meldung normal
+     AnzahlEintrÑge is ProjektEintrÑge                      \ 4.085
+     ?SaveParameter                                         \ 4.223
+     CloseTarget CloseStructure CloseText CloseCodefile  1sec  
+     " --- End of session ---" Log CloseLog  ; 
+
+Word: Main
+
+\ Probiert, das Programm zu îffnen, initialisiert, und ruft MainRoutine.
+\ Nach Abschluss der Mainroutine wird alles geschlossen fÅr eine saubere
+\ RÅckkehr zu DOS. 
+: Main 
+     SetUmgebung 
+     try ProgrammEinrichten tryError? 
+     if   ResetUmgebung page bye        \ Host nicht speichern
+     else ProgrammStarten 
+          ?Welcome                                          \ 4.229
+          try MainRoutine               \ Oberstes Try, fÅr alle FÑlle
+          ProgrammBeenden 
+          ResetUmgebung
+     then  ; 
+
+Group: Turnkey
+
+Den neuen Host bilden als Turnkeyprogramm. Der Host ist als Turnkey
+noch nicht funktionsfÑhig, da die Metacodebereiche fehlen. Das Turnkey
+muss zuerst mit TheEnd als Hostsystem gespeichert werden.
+
+Turnkey reserviert beim Start den mxCodebereich, SaveHost expandiert
+den zCode auf das volle Segment, sodass auch der mzCodebereich
+entsteht. Nach dem Neustart ist das Hostsystems voll funktionsfÑhig. 
+
+Word: Host
+
+\ Selbstartendes Programm, mit Cold verbunden in Turnkey. SaveHost und
+\ Bye nicht in Main einsetzen, da Main separat beim Entwickeln benutzt
+\ wird. 4.051 
+: Host
+     Main try SaveHost page bye  ; 
+
+Word: DefaultMonitor
+
+Doer DefaultMonitor 
+
+Word: ErsterStart
+
+\ Setzt Anfangswerte (Wahl der Targetplattform, Druckercodes, ..) und
+\ setzt Coldstartvektor auf Host. Die aktuellen Einstellungen werden mit
+\ SaveHost bei TheEnd gespeichert und sind beim Neustart wieder wirksam. 
+: ErsterStart
+     Console  DefaultMonitor
+     set NeueVersion?  " Neue Version = " Meldung  ask Version   
+     ['] Host is ColdStart  %Modul is Workmodus  Host  ; 
+
+Word: TurnkeyStart
+
+\ Das Tunrkey enthÑlt nur den Targetcode. FÅr den endgÅltigen Host muss
+\ noch der Metacodebereich reserviert werden. Das Turnkey reserviert beim
+\ Start den mxBereich und SaveHost schiebt den xCode an Paragraph $1000,
+\ wodurch der mzCode-Bereich entsteht. 
+: TurnkeyStart
+     console  
+     $400 malloc    
+     if   xSeg - 1+ is mxBegin   
+     else " Not enough memory" Meldung bye 
+     then ErsterStart  ; 
+
+Word: SetTurnkeyStart
+
+\ Start der Turnkey-Version. Das Turnkey richtet Coldstart auf das Wort
+\ Host (fÅr SaveHost), sodass spÑter die Initialisierung umgangen wird.
+\ !! Der Host muss als Profi geladen sein. !! 
+( SetTurnkeyStart )
+     Program: TurnkeyStart 
+
+Group: Entwicklung
+
+Word: MTask
+
+Task MTask 
+
+Word: setMTask
+
+( setMTask )
+     make mTask Main 
+
+Word: StopMTask
+
+: StopMTask
+     stop mTask  ; 
+
+Word: RunMTask
+
+: RunMTask
+     continue mTask  ; 
+
+Word: StartMTask
+
+\ Nur wÑhrend Entwicklung nîtig fÅr wiedereinstieg ohne Initialisieren. 
+: StartMTask
+     TaskKeys
+     start mTask  ; 
+
+Word: TestStart
+
+\ Startversion fÅr das Testen, Main lÑuft in Task. 
+: TestStart
+     Console InitDiablo DefaultMonitor  set NeueVersion?   \ 4.203
+     %Modul is Workmodus  StartMTask  ; 
+
+Word: t
+
+: t
+     teststart  ; 
+

@@ -1,0 +1,782 @@
+Module: System
+
+Group: Update
+
+Word: file1
+
+\ Handle of file1 
+0 integer file1 
+
+Word: file2
+
+\ Handle of file2 
+0 integer file2 
+
+Word: FileSeg
+
+\ Segment eines File-Buffers 
+0 integer FileSeg 
+
+Word: FileCopy
+
+\ Kopiert File mit Name $name1 zu File mit $name2, wobei das zweite File
+\ neu gebildet wird. 
+: FileCopy   ( $name1 $name2 -- )
+     mkfile is file2  open-r is file1
+     $800 malloc                        \ Buffer von 32K îffnen
+     if is FileSeg else " Out of memory" LoadMeldung then
+     begin FileSeg 0 $8000 file1 read ?dup
+     while FileSeg 0 rot file2 write drop
+     repeat
+     file1 close drop  file2 close drop  FileSeg mfree drop  ; 
+
+Word: BackupProgramm
+
+\ [Meldung nicht mit .Comment lîschen, da Wort (auch) bei Start benutzt
+\ wird, bevor Comment vorhanden] 
+: BackupProgramm
+     " Backing up the program" Meldung normal
+     Struktur$ STR-Back$ FileCopy 
+     Textfile$ TEX-Back$ FileCopy  ; 
+
+Word: Backup
+
+\ Text ist immer updated 
+: Backup
+     UpdateStructure  UpdateCodefile  BackupProgramm 
+     1sec .Comment                      \ 4.128
+     " --- Backup ---" Log  ; 
+
+Word: UpPeriode
+
+\ UpdatePeriode in Minuten. 
+1 constant UpPeriode 
+
+Word: Uptime
+
+\ Zeit von letztem Update, in Minute des Tages 
+0 integer Uptime 
+
+Word: Minute
+
+\ Minute des Tages, gezÑhlt ab Mitternacht. 
+: Minute   ( -- min )
+     time@ 2swap 2drop 60 * +  ; 
+
+Word: ?DoUpdate
+
+\ Update periodisch oder forciert bei Test und Run. 
+: ?DoUpdate
+     sUp? if UpdateStructure  false is sUp? then
+     lUp? if UpdateLog  false is lUp? then
+     tUp? if UpdateText false is tUp? then
+     Minute is Uptime  @xy ClearUpdateMarke xy  ; 
+
+Word: ?Update
+
+\ Update spÑtestens nach 1 Minute, ausgefÅhrt in Menukey. Abschalten in
+\ Editor, stîrt dauernd beim Schreiben. 4.036 
+: ?Update
+     Edit? ?exit  Minute Uptime - if ?DoUpdate then  ; 
+
+Group: About
+
+Word: TheTarget
+
+\ Wird mit Objekt String verbunden, kann aber nicht direkt als Objekt
+\ verwendet werden, nur indirekt: theTarget method. 
+Doer TheTarget 
+
+Word: Txx
+
+\ TheTarget zu "xx" initialisieren. 
+" xx" String Txx 
+
+Word: setTarget
+
+( setTarget )
+     make TheTarget txx 
+
+Word: Version
+
+10 Stringbuf Version 
+
+Word: Lizenz
+
+60 Stringbuf Lizenz 
+
+Word: AboutLÑnge
+
+0 integer AboutLÑnge 
+
+Word: AboutText
+
+\ Standardtext 4.221 4.241 
+WindowText: AboutText
+
+Holon 
+
+
+Copyright 1995-2003 by Wolf Wejgaard. All Rights Reserved.
+
+---------------------------------------------------------- 
+
+Word: .EintrÑge
+
+\ Die Anzahl EintrÑge in dezimal drucken. 4.140 
+: .EintrÑge
+     theBase decimal AnzahlEintrÑge . is theBase  ; 
+
+Word: Lizenztext
+
+: Lizenztext
+     Profi? Personal? or
+     if   0 7 wxy 
+          Profi? 
+          if   ." This developer version is licensed to:  " 
+          else ." This is the personal version of:  " 
+          then
+          0 8 wxy  bold print Lizenz normal 0 14 wxy  
+     else 0 9 wxy 
+     ." You are welcome to use this system free of charge."
+          0 10 wxy 
+     ." See http://holonforth.com/tools/products.htm"
+     then  normal  ; 
+
+Word: About
+
+\ Anzahl Entries zeigen. Lizenz zeigen und auch hier eingeben. 
+: About
+     Savescreen  1 7 ClrFelder  8 Feld" Exit" 
+     3 7 20 72 put AboutFenster  AboutFenster Fensterrahmen 
+     >rahmen 3 0 wxy ." ABOUT" normal
+     AboutText dup @ is AboutLÑnge 2+ is Buf  adr AboutLÑnge set BLen
+     4 10 19 70 put AboutFenster  Aboutfenster .Buffer  
+     bold 0 1 wxy ." Holon " TheTarget "print                \ 4.221
+     ."   V"  print Version  normal             
+     48 1 wxy .EintrÑge ." items"    
+     Lizenztext  Definition                           
+     key drop RestoreScreen  ; 
+
+Group: Welcome
+
+Word: WelcomeLÑnge
+
+0 integer WelcomeLÑnge 
+
+Word: Welcometext
+
+WindowText: Welcometext
+
+Welcome to HolonForth - the "Hands-on" Programming Tool.
+
+
+This Holon system can be used free of charge.
+
+
+For operation and commands see the online manual (press F1).
+You find further information about Holon and Forth in the web
+site http://holonforth.com
+      
+      
+Copyright 1995-2003 by Wolf Wejgaard. All Rights Reserved.
+
+                                       (Exit Holon= Ctrl+F8) 
+
+Word: ?Welcome
+
+: ?Welcome
+     Profi? Personal? or ?exit                              \ 4.307
+     SaveScreen 3 7 20 72 put Aboutfenster AboutFenster 
+     Fensterrahmen >rahmen 3 0 wxy ." WELCOME"
+     3 17 wxy ." PRESS A KEY TO CONTINUE" normal
+     Welcometext dup @ is WelcomelÑnge 2+ is Buf
+     adr WelcomelÑnge set BLen
+     4 10 19 70 put Aboutfenster Aboutfenster .Buffer Definition
+     Getkey drop RestoreScreen  ; 
+
+Group: Help
+
+  Help bzw. das Online Manual wird gerufen mit einem String. Wenn der
+String ein Thema-Wort im Manual bezeichnet (oder einen Teil eines
+Helpwortes), startet Help hier. Sonst geht Help zu dem Zustand, in dem
+es verlassen wurde beim letzten Mal.
+  Help speichert keine Bookmarks und Ñndert die Programmbookmarks
+nicht. 
+
+Word: .NoHelp
+
+: .NoHelp
+     " Sorry, no help available (needs HOLONHLP.STR,.TEX)"
+     Wartemeldung ; 
+
+Word: OldMacro?
+
+\ Zoomzustand merken. 4.097 
+Flag OldMacro? 
+
+Word: HelpWort
+
+\ Aktuelles Wort in Help 
+0 integer HelpWort 
+
+Word: theY3
+
+\ Speichert y3 fÅr RÅcksetzen. 
+0 integer theY3 
+
+Word: InfoRoutine
+
+\ Der Modus in Help setzt sich selbst das Deffenster korrekt; aber alten
+\ Wert beibehalten. 
+\ Nicht: Gezielt zu Kontexthelp springen, Zielwort in QFind$. 4.308 
+: InfoRoutine
+     Savescreen  Macro? is OldMacro?  set Help? hash  
+\     FindTeilwort QFind$ c@ 0<> and ?dup 
+\     if   GoWort %Wort is Modus  else 
+          Helpwort ?dup if GoWort then                      \ 4.308 
+          HelpModus %Wort min is Modus       
+\     then
+     y3 is theY3  9 is y3  y3 1- istUnten ComFenster        \ 4.138
+     y3 1+ istOben DefFenster  y5 1- istUnten Deffenster    
+     $17 ( grau ) ['] >rahmen 3 + c!  Mikrobild NeuZeigen  ; 
+
+Word: EndHelp
+
+\ [Workmodus wurde schon gleich Infomodus, :: Info forever, verhindern]
+\ Wenn Info aus Show, und Show von Modul oder Gruppe gerufen wurde, ist
+\ @Text nicht ok (holt Worttext). Aber das macht nichts, ResetShow holt
+\ nachher den richtigen Text. Deflinie zurÅcksetzen 4.138 
+: EndHelp
+     ?DoUpdate  Aktivwort is HelpWort  Modus is Helpmodus 
+     WorkModus %Info 1- min is Modus           \ WorkModus <> %Info !
+     clear Help?  hash  theY3 is Y3                         \ 4.138     
+     y2 1+ istOben Comfenster  y3 1- istUnten Comfenster
+     y3 1+ istOben Deffenster  y4 1- istUnten Deffenster
+     $1B ['] >rahmen 3 + c!  
+     RestoreScreen  OldMacro? if MakroBild then             \ 4.097
+     try @Text  ;                                           \ 4.033 
+
+Word: Info
+
+\ Info ist ein Modus, der aktuelle Modus wird notiert und verlassen (und
+\ rettet was zu retten ist) und Inforoutine nimmt Kontrolle. 
+\ 4.096 Gerufen mit Help-Zielwort-String/Thema. 
+: Info   ( $adr -- )
+     put QFind$  NoHelp? if .NoHelp exit then
+     Modus is WorkModus  %Info is Modus  ; 
+
+Word: SetInfo
+
+\ FÅr Printerhelp. 
+( SetInfo )
+     make >Info Info 
+
+Group: Menus&Key
+
+Word: AltMenu
+
+Doer AltMenu 
+
+Word: CtlMenu
+
+Doer CtlMenu 
+
+Word: CtlSftMenu
+
+Doer CtlSftMenu 
+
+Word: Menu#
+
+0 integer Menu# 
+
+Word: InitMenu
+
+\ Das Bild wird viel ruhiger, wenn die Menuzeile nicht unmotiviert
+\ flackert. Daher bei mehrfachen Befehlen mit einer Kontrolltaste das
+\ Normmenu unterdrÅcken (Bsp. +Com/-Com). 
+: InitMenu
+     ckeys 0= if NormMenu 0 is Menu# then  ; 
+
+Word: CtlKey
+
+: CtlKey
+     Menu# sft?
+     if   2 <> if CtlSftMenu then 2
+     else 3 <> if CtlMenu    then 3
+     then is Menu#  ; 
+
+Word: Foto?
+
+\ Gesetzt, wenn Holon im Bildschirmfoto-Modus ist. 718-1 
+Flag Foto? 
+
+Word: AltKey
+
+\ 718-1 mit Foto? 
+: AltKey
+     Menu# 1 <> if Foto? 0= if AltMenu then then 1 is Menu#  ; 
+
+Word: GetMenuKey
+
+\ Merkt sich alte Taste fÅr Wiederholungskontrolle. Tastenreaktion
+\ beschleunigen: solange Tasten vorliegen kein ?Monitor Test. 
+: GetMenuKey   ( -- c | func 0 )
+     begin     ckeys $FC and case
+               0 of Menu# if NormMenu then 0 is Menu# endof
+               4 of CtlKey  endof
+               8 of AltKey  endof
+               drop endcase
+               key? 0=        
+     while     ?Monitor ?Update 
+     repeat  key 
+     NewKey is OldKey dup if dup else over then is NewKey  ; 
+
+Word: ClrMenu
+
+\ Menu lîschen, Menu auffrischen forcieren. 
+: ClrMenu
+     1 7 ClrFelder 8 Feld" Exit"  -1 is Menu#  ; 
+
+Group: System Setup
+
+Word: SetupFenster
+
+4 9 18 71 Window SetupFenster 
+
+Word: SetupText
+
+: SetupText
+     SetupFenster FensterRahmen 
+     >rahmen 22 0 wxy ."  SYSTEM SETUP " normal  
+     6  3 wxy ." Target system  : "
+     6  6 wxy ." Display mode   : "
+     6 11 wxy ." Choose field with UP/DOWN keys, "
+     ." press SPACE to change. "
+     18 12 wxy ." Exit setup with F8 or ESC."  ; 
+
+Word: .TargetSpace
+
+Doer .TargetSpace 
+
+Word: ChangeTarget
+
+Doer ChangeTarget 
+
+Word: VideoMode
+
+\ Der Videomodus ist 2 (Mono) oder 3 (Farbe). 
+3 integer VideoMode 
+
+Word: .DisplayMode
+
+: .DisplayMode
+     22 6 wxy  VideoMode 2 = if ."  Mono   " else ."  Colour " then  ; 
+
+Word: SetupMenu
+
+: SetupMenu
+     1 7 ClrFelder 8 Feld" Exit"  ; 
+
+Word: FlipColours
+
+\ Im Mono-Modus Farben umschalten, Schwarz/Weiss (fÅr 'Fotos') oder W/S.
+\ 718-1 Foto-normal=violett/weiss ist lesbar und doch Unterschied zu
+\ bold. 
+: FlipColours
+     Foto?
+     if   $07 $0F $70 $07 clear Foto?
+     else $FD $F0 $0F $F0 set Foto?
+     then 
+     ['] >rahmen 4 + c! ['] inverse 4 + c! 
+     ['] bold 4 + c!    ['] normal 4 + c!  ; 
+
+Word: ChangeDisplay
+
+\ 718-1 FlipColours. 
+: ChangeDisplay
+     Videomode 2 = Ctl? and
+     if   FlipColours
+     else VideoMode 3 = if 2 else 3 then dup is VideoMode Video
+     then
+     Initlines RestoreScreen MikroBild Upbild SaveScreen
+     SetupText 
+     .TargetSpace inverse .DisplayMode normal SetupMenu  ; 
+
+Word: mIndex
+
+0 integer mIndex 
+
+Word: maxIndex
+
+2 constant maxIndex 
+
+Word: .mFeld
+
+: .mFeld
+     mIndex case
+     0 of .TargetSpace endof
+     1 of .DisplayMode endof
+     drop endcase  ; 
+
+Word: >mFeld
+
+: >mFeld   ( i -- )
+     normal .mFeld mIndex + maxIndex + maxIndex mod is mIndex
+     inverse .mFeld normal  ; 
+
+Word: SetupFelder
+
+: SetupFelder   
+     maxIndex times i is mIndex .mFeld loop  0 is mIndex 0 >mFeld  ; 
+
+Word: ChangeMFeld
+
+: ChangeMFeld
+     inverse mIndex case
+     0 of ChangeTarget endof
+     1 of ChangeDisplay endof
+     drop endcase  normal  ; 
+
+Word: DoSetup
+
+\ 5b8 Jede normale Taste ausser Esc und Enter wird an MFeld weiter
+\ gegeben. Dort wird getrennt nach 'bl und andere. 6ab-1 NoStack? flippen 
+: DoSetup
+     begin     key ?dup
+               if   dup is NewKey case
+                    'Esc of exit endof
+                    'cr of exit endof
+                    ChangeMFeld drop endcase
+               else dup is NewKey case
+                    'up of -1 >mFeld endof
+                    'down of 1 >mFeld endof 
+                    31 ( Alt+S) of NoStack? 0= is NoStack? 7 emit endof
+                    F8 of exit endof
+                    drop endcase
+               then 
+     again  ; 
+
+Word: SetupStart
+
+\ FÅr Startoperationen in Target. 65t. 33-33 
+Doer SetupStart 
+
+Word: SetupEnd
+
+\ FÅr Endoperationen in Target. 65t. 33-33 
+Doer SetupEnd 
+
+Word: SystemSetup
+
+\ 65g TargetMonitor Anzeige auf Stacklinie 33-20 / 65t Start+End-
+\ Operationen sind Targetsache, zB. Close und OpenTarget. 33-33 
+: SystemSetup
+     SaveScreen SetupStart
+     SetupText SetupMenu 
+     SetupFelder DoSetup
+     SetupEnd RestoreScreen 
+     .TargetMonitor  false is Monitor? .Monitorstatus  ;    \ 4.239 
+
+Group: Keyfile
+
+Das Keyfile hat folgendes Format: | crc(2) | $filename | $lizenz | ..
+Filename und Lizenz sind gemumbelt. Ab Offset 80 werden die
+Systemparameter gespeichert. 
+
+Word: DTA
+
+\ DTA fÅr Find-File. Vorsichtshalber gross genug. 
+create DTA  128 allot 
+
+Word: CreateDTA
+
+\ Eine DTA bilden fÅr die Findfile Operation. 
+\ [Die Default-DTA sitzt im PSP des Hosts wÑhrend der Entwicklung!] 
+Code CreateDTA
+     mov bx, cs  mov ds, bx   mov dx, # DTA
+     mov ah, # $1A  int $21  next 
+
+Word: FindFile
+
+\ f=0 wenn File gefunden. 
+Code FindFile   ( "adr -- f )
+     call >asciiz
+     mov ah, # $4E  sub cx, cx  int $21  
+     jmp ?doserr 
+
+Word: Keyname
+
+\ Name ohne Erweiterung. 
+8 Stringbuf Keyname 
+
+Word: Keyfilename
+
+\ Der DOS Name des Keyfiles. 
+12 Stringbuf Keyfilename 
+
+Word: Demumble
+
+: Demumble
+     count times dup c@ 32 /mod swap 8 * + over c! 1+ loop
+     drop  ; 
+
+Word: keym
+
+\ Entmumbelter Filename, aus dem Keyfile gelesen. 
+8 Stringbuf keym 
+
+Word: Keyfile
+
+\ Handle des Keyfile. 
+0 integer Keyfile 
+
+Word: CloseKeyfile
+
+: CloseKeyfile
+     Keyfile close drop  clear Keyfile  ; 
+
+Word: "!kf
+
+\ String in Keyfile schreiben. 
+: "!kf   ( "adr -- )
+     cs: swap Keyfile "!h  ; 
+
+Word: "@kf
+
+\ String aus dem Keyfile lesen. Zuerst ganzen Puffer lîschen. 
+: "@kf   ( "adr -- )
+     dup 1- "clear
+     cs: swap Keyfile "@h if endtry then   ; 
+
+Word: CRC
+
+\ Shiftet b in den CRC Wert mittels CRC-CCITT = $1021 (CRC-16 = $8005).
+\ s. Wil Baden: CRC Polynomials Made Plain, FORML '89, p.104-112. 
+: CRC   ( crc b -- crc )
+     flip xor 8 times dup 0< if 2* $1021 xor else 2* then loop  ; 
+
+Word: CheckCRC
+
+\ Liefert 0, wenn CRC ok. 
+: CheckCRC   ( -- crc )
+     0
+     Keyfile Filelength drop 2-         \ Anzahl bytes zu codieren
+     2. Keyfile lseek 2drop             \ Filezeiger auf erstes Byte
+     times Keyfile c@h crc loop         \ crc bilden
+     Keyfile Filereset
+     Keyfile @h                         \ crc lesen
+     split swap ( crc lo hi )
+     -rot ( hi crc lo ) crc ( hi crc ) swap crc  ; 
+
+Word: TargetOK?
+
+\ Gilt das Keyfile fÅr das aktuelle Target? 
+: TargetOK?   ( -- f )
+     TheTarget "get  2 Keym 6 + c! Keym 6 + "=  ; 
+
+Word: KeyTest
+
+\ Erst CRC checken; wenn ok, Filename einlesen und vergleichen; wenn ok,
+\ das Target checken; wenn ok, die Lizenz einlesen. n=3 wenn ok. 
+: KeyTest   ( -- n )
+     0                                  \ Anfangswert von n
+     CheckCRC 0=
+     if   1+  2. Keyfile lseek 2drop Keym "@kf  
+     Keym demumble  upcase Keym  upcase Keyname  Keym Keyname "=  
+          if   1+  TargetOK?
+               if   1+  Lizenz "@kf  Lizenz demumble 
+                    keyfile c@h is Profi?                   \ 4.307
+               then
+          then
+     then  ; 
+
+Word: Keyfile?
+
+\ Existiert ein Keyfile? Wenn ja, Name ablegen. Probieren File zu îffnen
+\ (Name kann falsch sein). Wenn ok, File geîffnet und f=true. 
+: Keyfile?   ( -- f )
+     createDTA " *.key" FindFile 0= 
+     if   8 DTA $1D + c!  DTA $1D + dup put Keyname put Keyfilename
+          " .KEY" add Keyfilename
+          Keyfilename open-r ?dup if is Keyfile true else false then
+     else false          
+     then  ; 
+
+Word: ?KeyFile
+
+\ Testen auf Existenz eines gÅltigen Keyfiles. Lizenz wird dabei
+\ eingelesen. Fehlermeldung mit 0:CRC, 1:Filename, 2:Target falsch. 
+: ?KeyFile                                                  \ 4.219
+     clear Profi?  clear Personal?                          \ 4.307
+     Keyfile?  
+     if   try KeyTest  CloseKeyfile  tryError? 
+          if " Fehler in filestrings" Kurzmeldung  0 then
+          dup 3 =
+          if   drop Profi? 0= if set Personal? then         \ 4.307    
+          else " Invalid keyfile   " Meldung . Pause normal .Comment
+          then
+     then  ; 
+
+Group: Parameter
+
+Im Profisystem werden die Systemparameter im Keyfile gespeichert ab
+Offset 80. 
+
+Word: WritePrinterPar
+
+: WritePrinterPar
+     PStart$ "!kf  GroupOn$ "!kf  GroupOff$ "!kf
+     NameOn$ "!kf  NameOff$ "!kf  ComDelim$ "!kf  
+     Zeilen/Seite Keyfile !h  ; 
+
+Word: WriteTargetPar
+
+Doer WriteTargetPar 
+
+Word: InsertCRC
+
+\ CRC Åber gesamtes File bilden und einsetzen. 
+: InsertCRC
+     0                                  \ Anfangs CRC
+     Keyfile Filelength drop 2-         \ Anzahl Bytes zu codieren
+     2. Keyfile lseek 2drop             \ Filezeiger auf erstes Byte
+     times Keyfile c@h crc loop         \ CRC bilden
+     Keyfile Filereset Keyfile !h  ;    \ und vorne ablegen 
+
+Word: WriteParameter
+
+\ Parameter in Keyfile speichern. 
+: WriteParameter                                            \ 4.223
+     80. Keyfile lseek 2drop 
+     Version "!kf  Videomode Keyfile !h 
+     WritePrinterPar
+     WriteTargetPar
+     InsertCRC
+     ; 
+
+Word: ?SaveParameter
+
+\ In Profisystem Parameter ablegen. Wenn das File nicht mehr vorhanden
+\ (weil der Kunde es wÑhrend der Sitzung entfernt hat...), nichts machen. 
+: ?SaveParameter
+     Profi? Personal? or                                    \ 4.307
+     if   Keyfilename open-r/w ?dup 
+          if   is Keyfile WriteParameter 
+               CloseKeyfile
+          then
+     then  ; 
+
+Word: ReadPrinterPar
+
+: ReadPrinterPar
+     PStart$ "@kf  GroupOn$ "@kf  GroupOff$ "@kf
+     NameOn$ "@kf  NameOff$ "@kf  ComDelim$ "@kf
+     Keyfile @h is Zeilen/Seite  ; 
+
+Word: ReadTargetPar
+
+Doer ReadTargetPar 
+
+Word: KeyfileVersion
+
+\ Beim ersten Lesen des Keyfiles kann die Version verschieden sein, wenn
+\ eine neue Systemversion in Betrieb genommen wird. Die Version auf dem
+\ Keyfile wird zum Vergleich benutzt und fÅr eventuelle Anpassungen beim
+\ Lesen der Parameter. 
+10 Stringbuf KeyfileVersion 
+
+Word: ReadParameter
+
+: ReadParameter                                             \ 4.223
+     80. Keyfile lseek 2drop 
+     KeyfileVersion "@kf  Keyfile @h is Videomode
+     ReadPrinterPar  ReadTargetPar  ; 
+
+Word: ?ReadParameter
+
+\ Wenn Profisystem und nicht neu (KeyfilelÑnge>80): Parameter einlesen. 
+: ?ReadParameter                                            \ 4.223
+     Profi? Personal? or                                    \ 4.307
+     if   Keyfilename open-r is Keyfile 
+          Keyfile Filelength drop 80 >
+          if   try ReadParameter tryError? 
+               if " $Fehler bei ReadParameter" Wartemeldung then
+          then CloseKeyfile
+     then  ; 
+
+Group: SaveSystem
+
+Word: SysFile
+
+\ Handle von Systemfile 
+0 integer SysFile 
+
+Word: Filemeldung
+
+: Filemeldung   ( "adr -- )
+     Wartemeldung  hex Err# . ErrClass . ErrAction .  
+     waitkey  endtry  ; 
+
+Word: !sf
+
+: !sf   ( n -- )
+     Sysfile !h  Err# if " !sf error" filemeldung then ; 
+
+Word: !Sysfile
+
+: !Sysfile   ( n off -- )
+     0 Sysfile lseek 2drop  Sysfile !h  ; 
+
+Word: ColdStart
+
+0 integer ColdStart 
+
+Word: SysParameter
+
+\ TrÑgt Parameter inklusive FilelÑnge d ein. 
+: SysParameter   ( d -- )
+     $5A4D !sf                          \ 00: Signatur
+     512 um/mod over if 1+ then swap !sf \ 02: Rest in letzter Page
+     !sf                                \ 04: Anzahl Pages in File
+     0 !sf                              \ 06: RelocTable EintrÑge
+     $10 !sf                            \ 08: Paragraphs in Header
+     $10 !sf $10 !sf                    \ 0A,0C: Min,MaxAlloc
+     $FD0 !sf                           \ 0E: SS Offset
+     $100 !sf                           \ 10: SP Anfangswert
+     0 !sf                              \ 12: Checksum
+     Cold !sf                           \ 14: IP=Coldstart
+     $FFF0 !sf  ;                       \ 16: CS-Offset 
+
+Word: SysfileHeader
+
+\ Generiert EXE-Header von 256 Bytes.
+\ [Aenderung des Targetraums hier nachtragen; nicht leichtfertig Ñndern.] 
+: SysfileHeader
+     $22000. SysParameter               \ FilelÑnge=139K (528)
+     $100 Sysfile Filelength drop -     \ Åbrige Bytes nullen
+     2/ 0 do 0 !sf loop  ; 
+
+Word: SysfileBody
+
+\ Speichert 64K zCode und 74K ($1200 para) xCode  (528)  
+\ [Aenderung des Targetraums hier nachtragen. VerhÑltnisse xCode & mxCode
+\ gut studieren!] 
+: SysfileBody
+     cs: $100 $FF00 Sysfile write        \ zCode
+     xSeg        0  $9000 Sysfile write  \ xCode erste HÑlfte 
+     xSeg $900 + 0  $9000 Sysfile write  \ xCode Rest
+     $1000 $100 !Sysfile
+     ColdStart >Main !Sysfile   ; 
+
+Word: SaveHost
+
+: SaveHost
+     NeueVersion?
+     if   clear NeueVersion? " HOLON44.EXE" 
+     else " .EXE" add ProgName  ProgName
+     then mkfile 
+     dup 0= if " mkfile error" Filemeldung then is Sysfile
+     SysfileHeader SysfileBody 
+     Sysfile close 0= if " closefile error" filemeldung then  ; 
+

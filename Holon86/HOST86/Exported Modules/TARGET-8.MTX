@@ -1,0 +1,1370 @@
+Module: Target-86
+
+ 
+
+Group: Target
+
+Word: Target
+
+0 integer Target 
+
+Word: 1PC
+
+1 constant 1PC 
+
+Word: 2PC
+
+2 constant 2PC 
+
+Word: DDE
+
+3 constant DDE 
+
+Word: 1PC?
+
+: 1PC?   ( -- f )
+     Target 1PC =  ; 
+
+Word: 2PC?
+
+: 2PC?   ( -- f )
+     Target 2PC =  ; 
+
+Word: tXSeg
+
+\ Anfangssegment des Listcodes. Die x-Adressen beziehen sich hierauf. 
+0 integer tXSeg 
+
+Word: >seg
+
+\ Adresse tadr in Segment seg umrechnen. Beide sind relativ zu tXSeg. 
+: >seg   ( tadr -- seg )
+     16 um/  ; 
+
+Group: 1PC-Codespace
+
+In diesem Modell wird der Targetcode als Coroutine in der Host-
+Plattform gebildet. Wir unterscheiden 3 CoderÑume fÅr die Grundfunktion
+(weitere kînnen bei Tasking gebildet werden). 
+
+Word: zSegment
+
+\ Anfangsparagraph des 64kB zCoderaums (oberste 512 Bytes = Taskarea). 
+0 integer zSegment 
+
+Word: sSegment
+
+\ Beginn von Taskarea von Maintask, 512 Bytes. 
+0 integer sSegment 
+
+Word: xSegment
+
+\ Anfangsparagraph von xCode. 
+0 integer xSegment 
+
+Word: !zSeg
+
+\ n in zSegment bei zca legen. 
+: !zSeg   ( n zca -- )
+     zSegment swap !l  ; 
+
+Word: !tTA
+
+\ n bei off in Target-Main-Taskarea ablegen. 
+: !tTA   ( n off -- )
+     sSegment swap !l  ; 
+
+Word: LinkTargetTask
+
+\ MainTA ist verbunden mit MonitorTA (wÑhrend Entwicklung) oder mit sich
+\ selbst (im selbstÑndigen Programm). Der Targettask wird in diesen Kreis
+\ gebunden und zunÑchst inaktiv gesetzt. 
+: LinkTargetTask
+     ss: 0 @l  0 !tTA                   \ link verschieben zu ProgTA
+     -1  2 !tTA                         \ Status (inaktiv)
+     \ Monitortask = Host
+     sSegment ss: 0 !l                  \ Userlink
+     ; 
+
+Word: MitBreakfÅllen
+
+: MitBreakfÅllen
+     zSegment 0  $FE00 Break86 filll  ; 
+
+Word: InitTarget-1PC
+
+: InitTarget-1PC
+     MitBreakFÅllen  ; 
+
+Word: BuildCodespace
+
+\ Reserviert Speicherraum fÅr den Targetcode [rufen mit try] und
+\ verbindet Taskareas. 
+: BuildCodespace
+     $2200 malloc
+     if   dup is zSegment  $FE0 + dup is sSegment 
+          $20 + dup is xSegment is tXSeg  MitBreakFÅllen
+          LinkTargetTask
+          cpuCS put cpuES               \ TAB-Switch inaktivieren, 
+                                        \ s. ContinueWord
+     else " Not enough memory for target" EndMeldung
+     then  ; 
+
+Word: FreeCodespace
+
+\ Gibt den Targetcodespace wieder an DOS zurÅck (Ende des Programms). 
+: FreeCodespace
+     zSegment mfree drop                \ give back Targetspace
+     sSegment 0 @l  ss: 0 !l  ;         \ unlink TargetTaskarea 
+
+Group: 1PC-Send&Read
+
+Word: zSend-1
+
+\ Direkt in Targetcode schreiben, ohne Monitor zu simulieren. 
+: zSend-1
+     cs: zCode  zSegment zStart drop zBytes  movel  ; 
+
+Word: zReadCell-1
+
+: zReadCell-1   ( tadr -- n )
+     drop zSegment swap @l  ; 
+
+Word: zSendCell-1
+
+\ Nur in Targetcode schreiben, wird bei Debugging benutzt. 
+: zSendCell-1   ( 16b tadr -- )
+     drop zSegment swap !l  ; 
+
+Word: zRead-1
+
+\ Liest 16 Bytes ab tadr in zSegment von Target in Targetbuf ein. 
+: zRead-1   ( tadr -- )
+     >seg zSegment + 0  cs: Targetbuf 16 movel  ; 
+
+Word: xSend-1
+
+\ In Targetcode schreiben. 
+: xSend-1
+     cs: xCode  xSegment xStart >seg + 0  xBytes  movel  ; 
+
+Word: xRead-1
+
+\ Liest 16 Bytes ab tadr in xSegment von Target in Targetbuf ein. 
+: xRead-1   ( tadr -- )
+     >seg xSegment + 0  cs: Targetbuf 16 movel  ; 
+
+Word: rRead-1
+
+: rRead-1
+     sSegment $0A @l 0 is tRP
+     tRP0 drop tRP drop - 0 max rStack min is rLen
+     sSegment tRP drop cs: rBuf rLen movel
+     ; 
+
+Word: SetBreak-1
+
+\ INT 3 wird als Break Interrupt benutzt. 
+: SetBreak-1
+     zSegment tBreak drop 3 SetIntVec  ; 
+
+Word: SetErrorBreak-1
+
+\ INT 3 wird als Error Interrupt benutzt. 
+: SetErrorBreak-1
+     zSegment tError drop 3 SetIntVec  ; 
+
+Group: 1PC-Execute
+
+Word: sSend-1
+
+\ Stackbuffer von Host zu Target kopieren. 
+: sSend-1
+     tSP0 sLen 0 d- is tSP
+     cs: sBuf  sSegment tSP drop sLen movel  ; 
+
+Word: StackBytes
+
+\ Anzahl Bytes auf dem Stack in vernÅnftigen Grenzen halten, tSP wird
+\ nicht geÑndert, kann also in Debug kontrolliert werden. 
+: StackBytes   ( -- n )
+     tSP0 tSP d- drop 20 max 66 min     \ min -3, max 20 Cells
+     ; 
+
+Word: sRead-1
+
+\ Stack von Target zu Host Stackbuffer kopieren. Dabei mindestens alle
+\ CPU-Register (26 Bytes) Åbertragen. SP begrenzen auf -3...+20 EintrÑge. 
+: sRead-1
+     sSegment $0C @l 0 is tSP           \ SP aus Taskarea holen
+     StackBytes is sLen                 \ Bytes in tStack inkl. CPUReg.
+     sSegment tSP drop  cs: sBuf sLen cpuLen max movel 
+     cpuLen 0 add tSP  
+     GetCpuRegs  ; 
+
+Word: Init-iTask
+
+\ Targettask und -zeiger initialisieren fÅr Execute per Switch. -- Setzt
+\ voraus, dass >xSeg, >zca und >UserArea am gleichen Ort liegen im
+\ Target. 
+: Init-iTask  
+     xSegment >xSeg !zSeg
+     sSegment >UserArea !zSeg
+     0         2 !tTA                   \ Main-Task aktivieren
+     zSegment  4 !tTA                   \ ES=tCS
+     >zca      6 !tTA                   \ SI=>zca
+     zSegment  8 !tTA                   \ DS=tCS (spÑter auch CS)
+     tRP0 drop 10 !tTA
+     tSP drop  12 !tTA  ; 
+
+Word: GoUntilHalt
+
+\ Frîhlich switchen bis Maintask stoppt, dann Stack lesen. 
+: GoUntilHalt
+     begin Switch sSegment 2 @l until  ; 
+
+Word: tExecute-1
+
+\ Adresse tadr von Startwort (goExecute, GoColon, GoCode) in ColonStummel
+\ schreiben, Stack senden und Main-Taskarea in Target vorbereiten fÅr
+\ Switch. Dann switchen und warten, bis Task mit Halt endet. 
+: tExecute-1   ( xt tadr -- )
+     drop >zca 0 zSendCell  
+     sSend-1 Init-iTask GoUntilHalt  sRead-1  ; 
+
+Word: ?Online-1
+
+: ?Online-1
+     set Monitor?  ; 
+
+Word: Coroutine
+
+: Coroutine
+     1PC is Target
+     make zSendTarget zSend-1      make xSendTarget xSend-1
+     make zReadTarget zRead-1      make xReadTarget xRead-1
+     make rReadTarget rRead-1      make ?Online ?Online-1
+     make zReadCell   zReadCell-1  make InitTarget InitTarget-1PC
+     make zSendCell   zSendCell-1  make Living? true
+     make ExecuteTarget  tExecute-1
+     make OpenTarget   BuildCodespace
+     make CloseTarget  FreeCodespace
+     make SetBreakVector SetBreak-1
+     make SetErrorBreak SetErrorBreak-1
+     ; 
+
+Group: DDE-Kommunikation
+
+Word: DataMax
+
+1200 constant DataMax 
+
+Word: MsgBuf
+
+create MsgBuf    DataMax allot 
+
+Word: tLen
+
+: tLen   ( -- u )
+     MsgBuf 1+ @  ; 
+
+Word: tAdr
+
+: tAdr   ( -- u )
+     MsgBuf 3 + @  ; 
+
+Word: DataBuf
+
+: DataBuf   ( -- adr )
+     MsgBuf 5 +  ; 
+
+Word: ddeFile
+
+" c:\holon.dde" String ddeFile 
+
+Word: dFile
+
+0 integer dFile 
+
+Word: open-shared
+
+\ Oeffnet File mit Shared Attibut fÅr lesen und schreiben. 
+Code open-shared
+     mov al, # $42
+     jmp <open> 
+
+Word: Open-DDE-File
+
+\ Wenn das DDE-File noch nicht existiert, wird es kreiert und mit 1029
+\ Bytes gefÅllt, damit es sicher Platz hat fÅr den maximalen Code. 
+: Open-DDE-File                         \ 4.109
+     ddeFile open-shared dup 
+     if   is dFile
+     else ddeFile mkfile is dFile
+          1029 0 do $CC dFile c!h loop  dFile close drop 
+          ddeFile open-shared is dFile 
+     then ; 
+
+Word: dSendMessage
+
+\ Ruhig Commandbyte zuerst schreiben, da DOS den ganzen Befehl
+\ abarbeitet, bevor Windows weiter schaltet - nehme ich an. 
+: dSendMessage   
+     dFile Filereset  cs: MsgBuf tLen 5 + dFile write drop  ; 
+
+Word: dQuittung?
+
+\ Quittung von Target, Endmeldung nach AusfÅhrung. 
+: dQuittung?   ( -- f )
+     dFile Filereset dFile c@h 0=  ; 
+
+Word: dMeldung@
+
+\ Meldung und Resultate von Target lesen. 
+: dMeldung@
+     dFile @h MsgBuf 1+ !  cs: MsgBuf 3 + tLen 2+ dFile read drop  ; 
+
+Word: dWaitAntwort
+
+\ Warten auf Antwort bei normaler Targetkommunikation. 4.109 
+: dWaitAntwort  
+     now               
+     begin 2000 msec?                 
+           if  " Sorry, target is offline" Kurzmeldung EndTry
+           then 
+           dQuittung? 
+     until dMeldung@  ; 
+
+Word: dWaitMonitor
+
+\ Warten auf Antwort bei Monitortest. Wird mit Taste abgebrochen, auch
+\ mit Controltasten. 
+: dWaitMonitor                        
+     now  ckeys is oldckeys
+     begin key? ckeys oldckeys <> or if endtry then 
+           2000 msec? if false is Monitor? EndTry then 
+           dQuittung? 
+     until true is Monitor?  ; 
+
+Word: dMsg!
+
+: dMsg!   ( tadr tlen tcmd -- )
+     MsgBuf c! MsgBuf 1+ ! MsgBuf 3 + !  ; 
+
+Word: dMeldung
+
+\ Meldung mit eventuellen Daten an Target senden Åber CB, warten bis
+\ Target Handshake beendet. 
+: dMeldung   ( tAdr tLen tCmd -- )
+     dMsg! dSendMessage dWaitAntwort   ; 
+
+Word: Open-DDE
+
+: Open-DDE
+     Open-DDE-File ; 
+
+Word: Close-DDE
+
+: Close-DDE
+     ; 
+
+Group: DDE-Send&Read
+
+Word: zSend-DDE
+
+: zSend-DDE
+     zCode DataBuf zBytes move
+     zStart drop zBytes 1 dMeldung  ; 
+
+Word: xSend-DDE
+
+: xSend-DDE
+     xCode DataBuf xBytes move
+     xStart >seg xBytes 2 dMeldung  ; 
+
+Word: zRead-DDE
+
+: zRead-DDE  ( tadr -- )
+     drop 16 5 dMeldung
+     DataBuf TargetBuf 16 move  ; 
+
+Word: xRead-DDE
+
+: xRead-DDE   ( tadr -- )
+     >seg 16 7 dMeldung
+     DataBuf TargetBuf 16 move  ; 
+
+Word: zSendCell-DDE
+
+: zSendCell-DDE   ( n tadr -- )
+     drop swap DataBuf !  2 1 dMeldung  ; 
+
+Word: zReadCell-DDE
+
+: zReadCell-DDE   ( tadr -- n )
+     drop 2 5 dMeldung  DataBuf @  ; 
+
+Word: rRead-DDE
+
+: rRead-DDE
+     0 0 11 dMeldung
+     tLen rStack min is rLen
+     DataBuf rBuf rLen move  ; 
+
+Word: InitTarget-DDE
+
+: InitTarget-DDE
+     0 0 13 dMeldung  ; 
+
+Word: ?Online-DDE
+
+\ Testet, ob Monitor online ist, liest dabei xSeg ein. 
+: ?Online-DDE
+     0 0 9 dMsg! dSendMessage dWaitMonitor
+     dMeldung@  DataBuf @ is txSeg  ; 
+
+Group: DDE-Execute
+
+Word: sSend-DDE
+
+\ Legt Inhalt von Stack in Databuf und liefert Anzahl Bytes u. 
+: sSend-DDE   ( -- u )
+     sBuf DataBuf sLen move  sLen  ; 
+
+Word: sRead-DDE
+
+\ sLen ist Targetstacktiefe inklusive cpuRegister. Kann kleiner als
+\ cpuLen sein. 
+: sRead-DDE
+     tLen abs 60 min is sLen DataBuf sBuf sLen cpuLen max move  
+     tSP0 drop sLen - cpuLen + 0 is tSP  GetCpuRegs  ; 
+
+Word: tExecute-DDE
+
+\ Wort bei tadr ausfÅhren und warten auf Target bis Wort beendet. 
+: tExecute-DDE   ( tadr -- )
+     drop >r sSend-DDE r>  swap  4 dMsg! dSendMessage
+     begin ?escape dQuittung? until 
+     dMeldung@ sRead-DDE  ; 
+
+Word: SetBreak-DDE
+
+: SetBreak-DDE
+     tBreak drop 0 12 dMeldung  ; 
+
+Word: SetErrBreak-DDE
+
+: SetErrBreak-DDE
+     tError drop 0 12 dMeldung  ; 
+
+Word: DosDosDDE
+
+: DosDosDDE
+     DDE is Target
+     make zSendTarget zSend-DDE      make xSendTarget xSend-DDE
+     make zReadTarget zRead-DDE      make xReadTarget xRead-DDE
+     make rReadTarget rRead-DDE      make ?Online ?Online-DDE
+     make zReadCell   zReadCell-DDE  make InitTarget InitTarget-DDE
+     make zSendCell   zSendCell-DDE  make Living? true
+     make ExecuteTarget  tExecute-DDE
+     make OpenTarget  Open-DDE
+     make CloseTarget Close-DDE
+     make SetBreakVector SetBreak-DDE
+     make SetErrorBreak SetErrBreak-DDE
+     ; 
+
+Group: 2PC-Send&Read
+
+Neue Version ohne Checksumme, a la H11. 
+
+Word: MonCmd
+
+\ Mit jedem Befehl mÅssen total 5 Bytes gesendet werden: tCmd(1), tAdr(2)
+\ und tLen(2). Der Text wird klarer, wenn tAdr und tLen nicht mit MonCmd
+\ zusammengefasst wird, sondern bei jedem Befehl einzeln steht. Auch wenn
+\ tAdr und tLen Null sind. 
+: MonCmd   ( b -- )
+     ( ClrCom) !com  ; 
+
+Word: SendN
+
+\ Sendet n byteweise, erst hi dann lo. 
+: SendN   ( n -- )
+     split swap !com !com  ; 
+
+Word: ACK
+
+6 constant ACK 
+
+Word: ?ack
+
+: ?ack
+     ?@com drop  ; 
+
+Word: CommError
+
+: CommError
+     " Communication disturbed." Kurzmeldung endtry  ; 
+
+Word: zSend-2PC
+
+\ zCode an Codeadresse senden. 
+: zSend-2PC
+     3 0 
+     do   1 MonCmd  zStart drop sendN  zBytes sendN
+          zBytes 0 ?do zCode i + c@ !com loop
+          ?@com ACK = if leave&exit then
+     loop CommError  ; 
+
+Word: xSend-2PC
+
+\ xCode senden an Segmentadresse. 
+: xSend-2PC
+     3 0 
+     do   2 MonCmd  xStart >seg sendN  xBytes sendN
+          xBytes 0 ?do xCode i + c@ !com loop
+          ?@com ACK = if leave&exit then
+     loop CommError  ; 
+
+Word: sSend-2PC
+
+\ Stack senden inklusive CPU-Register. Sendet StacklÑnge slen und sLen
+\ Bytes. tSP0 ist fix im Target. 
+: sSend-2PC
+     3 0
+     do   3 MonCmd 0 sendN sLen sendN
+          sLen 0 do sBuf i + c@ !com loop 
+          ?@com ACK = if leave&exit then
+     loop CommError ; 
+
+Word: zSendCell-2PC
+
+\ Sendet n erst lo dann hi Byte an tadr. 
+: zSendCell-2PC   ( n tadr -- )
+     1 MonCmd  drop sendN  2 sendN  sendN  
+     ?ack  ; 
+
+Word: zReadCell-2PC
+
+: zReadCell-2PC   ( tadr -- n )
+     5 MonCmd  drop sendN  2 sendN  ?@com ?@com join  ; 
+
+Word: @byte
+
+\ Version fÅr Datentransfers, ohne Monitortest. Normalerweise kommen die
+\ Daten rasch. Wenn 100 ms Åberschritten werden muss ein Fehler
+\ vorliegen. 50 ms sind zu kurz, das Scheduling unter Windows kann da
+\ hineinspielen. 
+: @byte   ( -- c )
+     now begin 100 msec? if endtry then ComData? until @ComData  ; 
+
+Word: DataAddress
+
+0 integer DataAddress 
+
+Word: GetzCode
+
+: GetzCode
+     5 MonCmd  DataAddress sendN  16 sendN  
+     16 0 do @byte Targetbuf i + c! loop  ; 
+
+Word: zRead-2PC
+
+\ 16 Bytes einlesen von zCode-Adresse tadr. 
+: zRead-2PC   ( tadr -- )
+     drop is DataAddress
+     3 0 do try GetzCode tryError? 0= ?leave loop  ; 
+
+Word: GetxCode
+
+: GetxCode
+     7 MonCmd  DataAddress sendN  16 sendN
+     16 0 do @byte Targetbuf i + c! loop  ; 
+
+Word: xRead-2PC
+
+\ 16 Bytes einlesen von xCode-32bit-Adresse tadr. 
+: xRead-2PC   ( tadr -- )
+     >seg is DataAddress
+     3 0 do try GetxCode tryError? 0= ?leave loop  ; 
+
+Word: sRead-2PC
+
+\ Stack von Target lesen. StacklÑnge kommt als Byte, begrenzen. Dann
+\ mindestens cpuLen Bytes einlesen. 
+: sRead-2PC
+     6 MonCmd 0 sendN 0 sendN
+     ?@com 60 min is sLen
+     sLen cpuLen max 0 do ?@com sBuf i + c! loop  
+     tSP0 drop sLen - cpuLen + 0 is tSP  GetCpuRegs  ; 
+
+Word: rRead-2PC
+
+\ Returnstack einlesen. tRP0 ist fix im Target. Target sendet rLen als
+\ Byte und rLen Bytes ab tRP. 
+: rRead-2PC
+     11 MonCmd 0 sendN 0 sendN
+     ?@com 0 max rStack min is rLen
+     rLen 0 ?do ?@com rBuf i + c! loop  ; 
+
+Group: 2PC-Execute&Control
+
+Word: tExecute-2PC
+
+: tExecute-2PC   ( tadr -- )
+     drop >r sSend-2PC  4 MonCmd r> sendN 0 sendN
+     @com drop sRead-2PC  ; 
+
+Word: GetXSeg-2PC
+
+\ Monitortest, erwartet ein Quittungsbyte $43 und den Wert von xSeg.
+\ Daher ist xSeg immer im Host bekannt und muss nicht mehr separat
+\ eingelesen werden. Offene Leitungen erfassen.
+\ Monitorflag korrekt setzen, keine Fehlermeldungen. 
+: GetXSeg-2PC
+     Comdata?                           \ Target plaudert, nicht gut
+     if   ClrCom false   
+     else 9 MonCmd 0 sendN 0 sendN   
+          m@com case
+          $43 of  ?@com ?@com join is txSeg  true endof
+          drop false endcase
+     then is Monitor?  ; 
+
+Word: SetBreak-2PC
+
+\ Warten auf End-ACK von Target. 
+: SetBreak-2PC
+     12 MonCmd tBreak drop sendN 0 sendN ?ack  ; 
+
+Word: SetErrorBreak-2PC
+
+\ Warten auf End-ACK von Target. 
+: SetErrorBreak-2PC
+     12 MonCmd  tError drop sendN 0 sendN  ?ack  ; 
+
+Word: SeparateSystems
+
+: SeparateSystems
+     2PC is Target
+     make zSendTarget zSend-2PC         make xSendTarget xSend-2PC
+     make zReadTarget zRead-2PC         make xReadTarget xRead-2PC
+     make rReadTarget rRead-2PC         make ?Online GetXSeg-2PC
+     make zReadCell   zReadCell-2PC     make InitTarget noop  
+     make zSendCell   zSendCell-2PC     make Living? true
+     make ExecuteTarget tExecute-2PC    19200 is BaudRate
+     make OpenTarget  OpenComPort
+     make CloseTarget CloseComPort
+     make SetBreakVector SetBreak-2PC
+     make SetErrorBreak SetErrorBreak-2PC  ; 
+
+Group: Download
+
+Word: zReadFile
+
+: zReadFile
+     cs: zCode zBytes zStart inCodefile read drop  ; 
+
+Word: dlxy
+
+\ Speichert Cursorposition fÅr die Anzeige des Download-Fortschritts. 
+0. double dlxy 
+
+Word: zReload
+
+: zReload
+     ." Code " 
+     @xy is dlxy  zBegin
+     begin     2dup is zStart 
+               zEnd zStart d- 1000. dmin drop is zBytes
+               ?escape zBytes 0>  
+     while     dlxy xy zStart d.#### 
+               zReadFile zSendTarget
+               zBytes 0 d+
+     repeat  2drop  ; 
+
+Word: xReadFile
+
+: xReadFile
+     cs: xCode xBytes  xStart $10000. d+ inCodefile read drop  ; 
+
+Word: xReload
+
+\ xBytes sollte durch 16 teilbar sein. 
+: xReload
+     ."  List " 
+     @xy is dlxy  xBegin
+     begin     2dup is xStart 
+               xEnd xStart d- 992. dmin drop is xBytes
+               ?Escape  xBytes 0>  
+     while     dlxy xy xStart >seg .#### 
+               xReadFile xSendTarget
+               xBytes 0 d+
+     repeat  2drop  ; 
+
+Word: zxReload
+
+: zxReload
+     InitTarget zReload xReload  ; 
+
+Word: Download86
+
+\ [Nach Meldung bleibt Attribut invers. Vor Kurzmeldung normal setzen, da
+\ Meldung zuerst Comfenster lîscht.] 
+: Download86
+     " Downloading codeimage to target: " Meldung 
+     theBase hex try zxReLoad is theBase  tryError? 
+     if   normal " Downloading aborted" Kurzmeldung 
+     else 1000 msec .Comment  
+     then  ; 
+
+Word: SetDownload
+
+( SetDownload )
+     make Download Download86
+     make AutoDownload? true 
+
+Group: Turnkey
+
+Word: SetMeta+
+
+( SetMeta+ )
+     Meta 
+
+Word: zCold
+
+0 integer zCold 
+
+Word: zMain
+
+0 integer zMain 
+
+Word: =Cold_
+
+:_ =Cold_
+     is zCold  ; 
+
+Word: =Main_
+
+:_ =Main_
+     is zMain  ; 
+
+Word: !cf
+
+\ n in Codefile an aktuelle Position schreiben. 
+: !cf   ( n -- )
+     Codefile !h  ; 
+
+Word: zParas
+
+\ Anzahl Paragraphen belegt in zSegment, inklusive PSP. 
+: zParas   ( -- u )
+     zEnd drop Paragraphs  ; 
+
+Word: BuildExeHeader
+
+\ Der PSP im Codeimage dient auch als EXE-Header, daher nur 256 Bytes
+\ fÅr Header zuordnen. 
+: BuildExeHeader
+     Codefile FileReset  
+     $5A4D !cf                          \ 00: Signatur
+     zParas $20 + ( TA ) xEnd >seg +    \ FilelÑnge in Paragraphen
+     $20 /mod over if 1+ then           \ Zahl Pages und restl. Paras
+     swap $10 * !cf                     \ 02: Rest in letzter Page
+     !cf                                \ 04: Anzahl Pages in File
+     0 !cf                              \ 06: RelocTable EintrÑge
+     $10 !cf                            \ 08: Paragraphs in Header
+     $10 !cf $10 !cf                    \ 0A,0C: Min,MaxAlloc
+     zParas $10 - !cf                   \ 0E: SS Offset von Ende PSP
+     tSP0 drop !cf                      \ 10: SP Anfangswert
+     0 !cf                              \ 12: Checksum
+     zCold !cf                          \ 14: IP=Coldstart
+     $FFF0 !cf  ;                       \ 16: CS-Offset 
+
+Word: Code>Turnkey
+
+\ Kopiert npar Paragraphen von Codefile zu Turnkeyfile, jeweils von/zu
+\ aktueller Position. 
+: Code>Turnkey   ( npar -- )
+     $10 um* is dDummy
+     begin     FileSeg 0  dDummy $8000 0 dmin drop Codefile read 
+               FileSeg 0  rot File2 write 
+               $8000 =
+     while     dDummy $8000 0 d- is dDummy
+     repeat  ; 
+
+Word: CopyTurnkey
+
+: CopyTurnkey
+     $800 malloc if is FileSeg else " Out of memory" Endmeldung then
+     " TURNKEY.EXE" mkfile is File2  
+     Codefile FileReset 
+     zParas $20 + Code>Turnkey          \ zCode plus Taskarea
+     $10.000 Codefile lseek 2drop       \ xSeg
+     xEnd >seg Code>Turnkey             \ xCode
+     File2 close drop  FileSeg mfree drop  ; 
+
+Word: Turnkey86
+
+\ Bildet Turnkey aus Code im Codefile mit einem EXE-Header anstelle des
+\ PSP. Achtung: damit ist kein Platz fÅr den xMetaCode reserviert, d.h.
+\ beim Start des Turnkey muss zusÑtzlich Speicher alloziert werden. Wir
+\ kînnten das auch mit MINALLOC machen, aber dann ist das Startsegment
+\ mxBegin nicht so leicht zu bestimmen, oder? 
+: Turnkey86
+     Appl or 0= 
+     if " Sorry, coldstart is not defined (see Help: Turnkey)"
+        Endmeldung 
+     then " Building turnkey file" Meldung
+     zParas $20 + $100 0 !zf            \ xSeg einsetzen
+     Appl drop zMain 0 !zf              \ Startwort einsetzen
+     BuildExeHeader UpdateCodefile 
+     CopyTurnkey  1sec .Comment  ; 
+
+Word: SetTurnKey
+
+( SetTurnKey )
+     make BuildTurnkey Turnkey86 
+
+Group: Code
+
+Word: x=ListCodeFPC
+
+Text: x=ListCodeFPC
+Bei FPC ist der xCode der Listcode der Forthworte. Der Speicherraum
+wird in 16 Byte Pages geteilt. tXSeg ist die Anfangspage (Segment) des
+Listcode, txca ist die relative Page bezogen auf tXSeg. tES zeigt auf
+die aktuelle Page (Segment bei 80x86) = tXSeg + tXca . 
+
+Word: ListSeg_
+
+\ Das Segment bezogen auf xSeg, bei dem der Listcode des aktuellen Wortes
+\ beginnt. 
+:_ ListSeg_   ( -- seg )
+     xStart 16 um/  ; 
+
+Word: xCodeadr
+
+\ Adresse im xCodefenster. 
+: xCodeadr   ( d-off -- adr )
+    drop xCode +  ; 
+
+Word: !x
+
+: !x   ( w d-off -- )
+     xCodeAdr !t  ; 
+
+Word: @x
+
+: @x   ( d-off -- n )
+     xCodeAdr @t  ; 
+
+Word: tXca
+
+\ Segmentadresse des Listcodes des aktuellen Wortes. 
+0 integer tXca 
+
+Word: GetXca86
+
+: GetXca86   ( tadr1 -- tadr2 )
+     3. d+ @zf 16 um*  ; 
+
+Word: zCodeBreak86
+
+\ Das zCodefenster mit dem Break-Opcode fÅllen. 
+: zCodeBreak86
+     zCode 1024 Break86 fill  ; 
+
+Word: ROMBase86
+
+\ ROM Base ist immer $100. 
+: ROMBase86   ( tadr -- tadr )
+     2drop $100.  ;                                         \ 4.242 
+
+Word: ROMTop86
+
+\ V4.6: In Testsystem 12 KB zCode zulassen. - Das ist viel!
+\ V4.7: auch im Testsystem voller Bereich. 
+: ROMTop86   ( tadr -- tadr )
+\     2drop Profi? Personal? or if $DFFF. else $2FFF. then   ; 
+                                                       \ 4.307
+     2drop $DFFF.  ;                                   \ 4.309 
+
+Word: SetCode
+
+( SetCode )
+     make ROMBaseXX ROMBase86
+     make ROMTopXX ROMTop86
+     make FPC? true
+     make HiLo? false
+     make GetXca GetXca86
+     make zCodeMitBreakFÅllen zCodeBreak86 
+
+Word: ColonHere86
+
+: ColonHere86   ( -- tadr )
+     xBytes 0  ; 
+
+Word: SetCompiler
+
+( SetCompiler )
+     make Living? true
+     make LoadOhneTarget? false              
+     make ColonHere ColonHere86 
+
+Group: Meta
+
+Word: ?structure_
+
+\ [In Target86 verlegt.] 4.210 
+:_ ?structure_   ( i1 i2 -- )
+     2dup <>
+     if   " Sorry, wrong structure" NameMeldung
+     else 2drop
+     then  ; 
+
+Word: >mark_
+
+:_ >mark_   ( i -- off )
+     xBytes 0 ,x  ; 
+
+Word: <mark_
+
+:_ <mark_   ( i -- off )
+     xBytes  ; 
+
+Word: >resolve_
+
+:_ >resolve_   ( i1 off i2 -- )
+     rot ?structure_ xBytes over - swap xCode + !t  ; 
+
+Word: <resolve_
+
+:_ <resolve_   ( i1 off i2 -- )
+     rot ?structure_ xBytes - ,x  ; 
+
+Word: !86
+
+: !86  ( n adr -- )
+     0 !z  ; 
+
+Word: @86
+
+: @86  ( adr -- w )
+     0 @z  ; 
+
+Word: Compile,86
+
+: Compile,86   ( d -- )
+     drop ,x  ; 
+
+Word: SetMeta86
+
+( SetMeta86 )
+     make do, ,z
+     make do-c, c,z  
+     make doHere aHere
+     make doAllot zAllot
+     make Compile, Compile,86
+     make do! !86
+     make do@ @86 
+
+Group: Show
+
+Word: Target86
+
+\ Targetnummer fÅr Hostname in About und fÅr Keyfiletest. 
+" 86" String Target86 
+
+Word: .cAdr86
+
+: .cAdr86   ( seg -- )
+     zCode? if .zAdr else .xAdr then  ; 
+
+Word: ShowTitel86
+
+: ShowTitel86
+     zCode? if " CODE" else " LIST" then WordTitel  ; 
+
+Word: ShowMenuF6-86
+
+: ShowMenuF6-86
+     6 zCode? if Feld" LIST" else Feld" CODE" then  ; 
+
+Word: .%
+
+\ Anzeige von n in %. 
+: .%   ( n -- )
+     0 <# ascii % hold #s #> type  ; 
+
+Word: CompInfo86
+
+: CompInfo86
+     ." CODE<" zEnd d. 8 emit 3 .-
+     ." LIST<" xEnd >seg 0 d. 8 emit  [char] : emit  2 .- 
+     alt?                       
+     if   decimal
+          ." [host " mzHere mzBegin - 100 mzLimit mzBegin - */ .%
+          space mxHereSeg mxBegin - 100 mxLimit mxBegin - */ .%
+          ." ]" hex
+     then  
+     ; 
+
+Word: SetShow86
+
+( SetShow86 )
+     make .cAdr .cAdr86
+     make TheTarget Target86
+     make ShowTitel ShowTitel86
+     make ShowMenuF6 ShowMenuF6-86
+     make CompInfo CompInfo86 
+
+Group: Debug
+
+Word: Destination86
+
+\ Bei der Addition der Adresse 15 bitig bleiben, $FF00 ist negative Zahl. 
+: Destination86   ( zca1 -- zca2 )
+     drop 1+ dup 0 @zf + 2+ 0  ; 
+
+Word: Colon?86
+
+: Colon?86   ( -- f )
+     zca =Colon? DoDoes? or 
+     dup if zca GetXca 16 um/ is tXca then  ; 
+
+Word: ReadXT86
+
+\ Listcode liegt im xCodefenster, da das Wort neu geladen wurde. Bei
+\ Listcode ist tadr = (32-Bit-) Offset in Codefenster. 
+: ReadXT86   ( tadr -- xt )
+     colon? if @x else @zf then 0  ; 
+
+Word: SendXT86
+
+\ Listcode-xt in xCodefenster schreiben und ganzes Fenster senden.
+\ Maschinencode direkt in Targetschreiben. 
+: SendXT86   ( xt tadr -- )
+     2>r drop 2r> 
+     colon? if !x xSendTarget else !zt then  ; 
+
+Word: ColonStep86
+
+\ tIP folgt dem Step im Debugger, ist immer aktuell (Annahme, Debugger
+\ muss dies erfÅllen). 
+: ColonStep86   
+     tIP drop is cpuSI tES is cpuES  tGoColon zExecute  ; 
+
+Word: CodeStep86
+
+\ TrapFlag (SingleStep) nullen, kînnte bei Wildlaufen gesetzt sein. tPC
+\ entspricht immer dem aktuellen Step. 
+: CodeStep86
+     cpuCF $FEFF and is cpuCF           \ TF nullen
+     tPC drop is cpuPC  tGoCode zExecute  ; 
+
+Word: +dxy
+
+: +dxy   ( x1 y -- x2 y )
+     5 +2nd 2dup xy  ; 
+
+Word: .CPUText86
+
+: .CPUText86
+     x4 39 - y4 +dxy CpuAcc?
+     if   ." AX" +dxy ." BX" +dxy ." CX" +dxy ." DX" +dxy 
+          ." SI" +dxy ." DI" +dxy ." CF" 
+     else ." CS" +dxy ." DS" +dxy ." SS" +dxy ." ES" +dxy 
+          ." SP" +dxy ." BP" +dxy ." PC" 
+     then 2drop  ; 
+
+Word: .#xy
+
+: .#xy   ( x1 y n -- x2 y )
+     .#### +dxy  ; 
+
+Word: .CPUWerte86
+
+: .CPUWerte86
+     x4 40 - y4 1+  CpuAcc?
+     if   +dxy cpuAX .#xy cpuBX .#xy cpuCX .#xy cpuDX 
+          .#xy cpuSI .#xy cpuDI .#xy cpuCF .#xy
+     else +dxy cpuCS .#xy cpuDS .#xy cpuSS .#xy cpuES 
+          .#xy tSP drop .#xy cpuBP .#xy tPC drop .#xy
+     then 2drop  ; 
+
+Word: InWord?86
+
+: InWord?86   ( tadr -- f )
+     AnfangsStep ip() 2over 1. d+ d<
+     -rot MaxStep 1- ip() 1. d+ d< and
+     colon?
+     if tXca tXSeg + tES = and then  ; 
+
+Word: Sprung?86
+
+: Sprung?86   ( -- f )
+     ip(step+1) ip(step) d- 4. d=
+     ip(step) 2. d+ 2dup @x s>d d+                          \ 87e
+     2dup is ZielIP
+     inWord? and ip(step) @x 0 zLit d<> and  ; 
+
+Word: Leave?86
+
+: Leave?86   ( -- f )
+     ip(step) @x 0 2dup tLeave d= -rot t?Leave d= or dup
+     if rBuf 4 + @t 0 2dup @x 0 d+ is ZielIP then  ; 
+
+Word: CondJmp86?
+
+\ Conditional Jump (mit 8bit Offset)? 
+: CondJmp86?   ( -- f )
+     xt(step) drop $F0 and $70 =             \ Jxx?
+     xt(step) drop $FC and $E0 = or          \ E0..E3?
+     xt(step) drop $FF and $EB = or          \ reljmp?
+     dup 
+     if   xt(step) drop split nip dup 127 > if $FF00 or then
+          0 tPC d+ 2. d+ is ZielIP  
+     then  ; 
+
+Word: AbsJmp?86
+
+: AbsJmp?86   ( -- f )
+     ip(step) jmp?  jumping? and dup
+     if ip(step) Destination is ZielIP then  ; 
+
+Word: StartIP&XT86
+
+: StartIP&XT86   ( -- ip xt )
+     colon?
+     if   0. 2dup @x 0
+     else zca 2dup @z 0
+     then  ; 
+
+Word: ?Doer
+
+: ?Doer   ( xt1 -- xt2 )
+     2dup jsr? >r 2dup Destination tDoit d= r> and
+     if 3. d+ @zt 0 then  ;                                 \ 87e 
+
+Word: UnterwortXT86
+
+: UnterwortXT86   ( -- xt )
+     colon?
+     if   xt(step) ?Doer
+     else ip(step) Destination  
+     then  ; 
+
+Word: SetDebug1
+
+( SetDebug1 )
+     make Destination Destination86
+     make Colon? Colon?86      
+     make ReadXT ReadXT86
+     make SendXT SendXT86     
+     make ColonStep ColonStep86
+     make CodeStep CodeStep86
+     make .CPUText .CpuText86
+     make .CPUWerte .CPUWerte86 
+
+Word: SetDebug2
+
+( SetDebug2 )
+     make InWord? InWord?86      
+     make Sprung? Sprung?86
+     make Leave? Leave?86      
+     make CondJmp? CondJmp86?
+     make AbsJmp? AbsJmp?86
+     make StartIP&XT StartIP&XT86
+     make UnterwortXT UnterwortXT86 
+
+Group: Setup
+
+Word: .Monitor86
+
+\ Zeigt aktuellen Monitor auf der Stacklinie ganz rechts. Format [MON] 
+: .Monitor86
+     >rahmen x4 6 - y4 xy  ." [" bold Target case
+     1PC of ." COR" endof
+     DDE of ." WIN" endof
+     2PC of ." 2PC" endof
+     drop endcase >rahmen  ." ]" normal ; 
+
+Word: .TargetSpace86
+
+\ Angabe der Com-Nummern. 
+: .TargetSpace86
+     22 3 wxy 
+     Target case
+          1PC of ."  Coroutine " normal 29 spaces endof
+          DDE of ."  DOS window (WMON86.EXE)" endof
+          2PC of ."  Separate PC, via COM-" Com# . 
+                    normal ."  (choose: 1-4)"
+                     endof
+     drop endcase  ; 
+
+Word: >Com
+
+\ Com# und Com-Adr. setzen gemÑss i. 
+: >Com   ( i -- )
+     dup is Com#  case
+     1 of $3F8 endof     2 of $2F8 endof
+     3 of $2E8 endof     4 of $2E8 endof
+     drop endcase is Com  ; 
+
+Word: ChangeCom
+
+\ COM-Nummer direkt wÑhlen mit Tasten 1..4 
+: ChangeCom
+     Newkey dup 49 < swap 52 > or ?exit  Newkey 48 - >Com  ; 
+
+Word: ChangeTarget86
+
+\ Nur Targetnummer umsetzen. 
+: ChangeTarget86
+     Target case
+     1PC of DDE is Target endof
+\     DDE of Profi? if 2PC else 1PC then is Target endof     \ 4.228
+     DDE of 2PC is Target endof     \ 4.228
+     2PC of NewKey 'bl = if 1PC is Target else ChangeCom then endof
+     drop endcase .TargetSpace  ; 
+
+Word: OldTarget
+
+\ Target zu Beginn von Setup. 
+0 integer OldTarget 
+
+Word: OldCom#
+
+\ ComPort zu Beginn von Setup. 
+0 integer OldCom# 
+
+Word: SetupStart86
+
+\ Zustand bei Beginn von SystemSetup merken. 
+: SetupStart86
+     Target is OldTarget  Com# is OldCom#  ; 
+
+Word: NewTarget
+
+\ Target umschalten. 
+: NewTarget
+     CloseTarget Target case
+     1PC of Coroutine endof
+     DDE of DosDosDDE endof
+     2PC of SeparateSystems endof
+     drop endcase set TargetLeer?            
+     .Monitor86  try OpenTarget  ;                          \ 4.240 
+
+Word: NewCom
+
+\ Alten ComPort schliessen und den neuen îffnen. 
+: NewCom
+     Com#  OldCom# >Com CloseComPort  >Com OpenComPort  ; 
+
+Word: SetupEnd86
+
+\ Falls Target geÑndert wurde, altes Target schliessen und neues îffnen.
+\ Wenn 2PC nicht Ñndert, testen ob neuer ComPOrt. 
+: SetupEnd86
+     Target OldTarget <>
+     if   NewTarget 
+     else Target 2PC = 
+          if   Com# OldCom# <> if NewCom then
+          then
+     then  ; 
+
+Word: WriteTarget86
+
+\ Parameter von T86 speichern in Keyfile. 
+: WriteTarget86                                             \ 4.223
+     Target Keyfile !h  Com# Keyfile !h  ; 
+
+Word: ReadTarget86
+
+\ Parameter von T86 lesen aus Keyfile. It's like a change in Setup. 
+: ReadTarget86           
+     SetupStart86
+     Keyfile @h is Target Keyfile @h is Com#                \ 4.223
+     SetupEnd86  ; 
+
+Word: Setup86
+
+( Setup86 )
+     make .TargetSpace .TargetSpace86
+     make .TargetMonitor .Monitor86
+     make ChangeTarget ChangeTarget86
+     make SetupStart SetupStart86
+     make SetupEnd SetupEnd86     
+     make WriteTargetPar WriteTarget86 
+     make ReadTargetPar ReadTarget86 
+
+Group: Run
+
+Word: +CtlMenu86
+
+: +CtlMenu86
+     5 Feld" "
+     6 Feld" Backup"
+     7 Feld" Turnkey"
+     8 Feld" TheEnd"  ; 
+
+Word: +CtlSftMenu86
+
+: +CtlSftMenu86
+     6 Feld" "
+     7 Feld" Download" 
+     8 Feld" Display"  ; 
+
+Word: +CtlFunc86
+
+: +CtlFunc86   ( c true c -- c f )
+     case
+     ^F5 of endof
+     ^F6 of ClrMenu Backup endof
+     ^F7 of ClrMenu try BuildTurnkey endof
+     ^F8 of Help? 0= if Modus is Workmodus %Ende is Modus then endof
+     2drop false endcase  ; 
+
+Word: +CtlSftFunc86
+
+: +CtlSftFunc86   ( c true c -- c f )
+     case
+     ^F6 of endof
+     ^F7 of ClrMenu Download endof
+     ^F8 of InitY234 Refresh endof
+     2drop false endcase  ; 
+
+Word: ?ContinueWord
+
+: ?ContinueWord
+     Target 1PC <> ?exit
+     Runable? cpuES cpuCS <> and        \ hat Target ge-tab't?
+     if  ?DoUpdate
+         SaveScreen cpuSI 0 is tIP try ColonStep RestoreScreen
+     else " Sorry, no program switch state" KurzMeldung
+     then  ; 
+
+Word: Test86
+
+\ Testzeile ausfÅhren, wurde als Listencode zu xEnd gelegt, wird als
+\ Colonstep ausgefÅhrt. Trick: xSeg in Target aus cpuCS bestimmen (Ann.
+\ xCode beginnt bei CS+$1000). 
+: Test86
+     0 is cpuSI  cpuCS $1000 + xEnd >seg + is cpuES 
+     tGoColon zExecute  ; 
+
+Word: SetRun
+
+( SetRun )
+     make TabFunc ?ContinueWord
+     make +CtlMenu +CtlMenu86
+     make +CtlFunc +CtlFunc86
+     make +CtlSftMenu +CtlSftMenu86
+     make +CtlSftFunc +CtlSftFunc86
+     make TestExecute Test86 
+
+Word: SetMonitor
+
+( SetMonitor )
+     make Defaultmonitor Coroutine 
+

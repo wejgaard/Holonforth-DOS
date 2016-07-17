@@ -1,0 +1,710 @@
+Module: Module
+
+Group: Modulfile
+
+Word: DasModulfile
+
+Text: DasModulfile
+  Das Modulfile besteht aus Text und Struktur gemeinsam. Am Anfang
+befindet sich ein 16 Byte Header. Er enthÑlt die Versionsmarke 'V3' .
+den Zeiger auf den Beginn der Struktur und 12 Reservebytes, genullt.
+Dahinter folgt der Text, jedes Wort auf vollen Paragraph gefÅllt, und
+dann die Struktur.
+/'V3'/ ^Struktur// ..Text.. / ..Struktur.. / 
+
+Word: Modulfile
+
+0 integer Modulfile 
+
+Word: inside?
+
+\ Liefert true, wenn n2 <= n1 <= n3. 
+: inside?   ( n1 n2 n3 -- f )
+     rot dup>r < swap r> > or 0=  ; 
+
+Word: NonDOSChar?
+
+\ true, wenn c nicht ein erlaubtes Zeichen fÅr DOS-Filenamen ist. 
+: NonDOSChar?   ( c -- f )
+     dup 32 < over 34 = or  over 43 44 inside? or  
+     over 46 47 inside? or  over 58 63 inside? or
+     over 91 93 inside? or  over 124 = or  swap 126 > or  ; 
+
+Word: Modulfile$
+
+/Name Stringbuf Modulfile$ 
+
+Word: >Modulfile$
+
+\ Schreibt Name des aktuellen Moduls in Modulfile$. Verwandelt in 'upper
+\ case' und korrigiert auf DOS Filename. 
+: >Modulfile$
+     AktivModul ModulFile$ @name             \ Name holen
+     Modulfile$ c@ 8 min Modulfile$ c!       \ Name begrenzen
+     upcase Modulfile$
+     Modulfile$ count 0                      \ Name kontrollieren
+     do   dup i + c@ NonDosChar? 
+          if dup i + [char] - swap c! then
+     loop drop  ; 
+
+Word: ModulFileName
+
+\ Modulfilename bilden aus Modulname mit Erweiterung .MOD. UnzulÑssige
+\ Zeichen im Filenamen ersetzen durch '-'. 
+: ModulFileName   ( -- "adr )
+     >Modulfile$ 
+     " .MOD" add Modulfile$            \ Erweiterung anhÑngen
+     Modulfile$  ; 
+
+Word: >16Grenze
+
+\ Filezeiger zur nÑchsten Paragraphgrenze schieben und Zwischenraum
+\ lîschen. 
+: >16Grenze
+     Modulfile Filelength 16 um/mod drop \ Rest in para
+     ?dup if 16 swap - 0 ?do 0 Modulfile c!h loop  then  ; 
+
+Group: FreeSegment
+
+Word: fSeg
+
+\ Anfang des freien Speichers, alloziert fÅr Strukturoperationen 
+0 integer fSeg 
+
+Word: freeSpace
+
+\ 35-11 
+$800 constant freeSpace 
+
+Word: AllocFreeseg
+
+\ 32K reservieren fÅr Modulstruktur, hat Platz fÅr 800 EintrÑge, das
+\ sollte auch fÅr extreme Module genÅgen. 68h FreeSpace als Parameter.
+\ 35-11 
+: AllocFreeseg
+     freeSpace malloc
+     if   is fSeg
+     else drop " Insufficient memory" EndMeldung
+     then  ; 
+
+Word: ReleaseFreeseg
+
+: ReleaseFreeseg
+     fSeg mfree if " Error releasing memory" EndMeldung then  ; 
+
+Word: fadr
+
+\ Segmentadresse von item V3 
+: fadr   ( item off -- seg off )
+     >r dup 2* fSeg + swap 8 * r> +  ;  \ /Eintrag = 40 Bytes/item 
+
+Word: @f
+
+: @f   ( item off -- n )
+     fadr @l  ; 
+
+Word: fNachfolger
+
+: fNachfolger   ( fEintrag1 -- fEintrag2 )
+     2 @f  ; 
+
+Word: fFirst
+
+\ Liefert ersten Eintrag in Unterteil von anker. 
+: fFirst   ( anker -- eintrag )
+     6 @f  ; 
+
+Word: f<=>s
+
+\ Segmentzeiger tauschen. fSeg zeigt auf Original, sSeg zeigt auf die neu
+\ zu bildende Struktur. 
+: f<=>s
+     ProgSeg fSeg is ProgSeg is fSeg  ; 
+
+Group: Kopieren
+
+Word: ModulKopieren
+
+Text: ModulKopieren
+  Die neue Modulstruktur wird als normale Struktur gebildet. Die
+Originalstruktur wird zuvor in einen freien Speicherraum verschoben.
+  Die EintrÑge werden nicht en bloc kopiert, sondern es wird fÅr jeden
+alten ein neuer Eintrag in der Struktur gebildet und nur der Name wird
+kopiert. Hierdurch sind alle Links automatisch richtig. 
+
+Word: DasModul
+
+\ Das bearbeitete Modul (Import oder Export) 
+0 integer DasModul 
+
+Word: Import?
+
+0 integer Import? 
+
+Word: CopyName
+
+\ Name von eintrag in f-Raum zu eintrag in s-Raum kopieren. 
+: CopyName   ( fEintrag sEintrag -- )
+    swap Name fadr 2dup @l /name min >r rot Name sAdr r> 1+ movel  ; 
+
+Word: CopyMGTextZeiger
+
+\ Den Textzeiger aus dem alten in den neuen Eintrag kopieren. Zeigt auf
+\ den alten Text und wird nach dem Kopieren des Textes durch den neuen
+\ Textzeiger ersetzt. 4.026 
+: CopyMGTextZeiger   ( fEintrag sEintrag -- )
+     swap mgTextfeld @f swap mgTextfeld !s  ; 
+
+Word: WortEintrag
+
+: WortEintrag
+     ,Eintrag dup KeineWorte?
+     if   Wortanker InsertEintrag1
+     else AktivWort InsertEintrag
+     then is AktivWort  ; 
+
+Word: CopyWort
+
+\ Wort als neuen Eintrag bilden und damit verketten und automatisch
+\ initialisieren. Name von Original kopieren. Textzeiger Åbernehmen. 
+: CopyWort   ( fEintrag -- )
+     WortEintrag dup AktivWort CopyName Textfeld @f !Textzeiger  ; 
+
+Word: ExportText
+
+\ Text des Eintrags kopieren, Wort, Gruppe, oder Modul. 4.026 Textende
+\ direkt setzen statt mit WortlÅcke indirekt forcieren 
+: ExportText
+     @Text ProgTextfile                 \ try in ExportModul 4.049
+     Modulfile is ProgTextfile          \ Modulfile spielt Textfile
+     TextEnde dup (!Text) !Textzeiger                          
+     is ProgTextfile  >16Grenze  ; 
+
+Word: ImportText
+
+\ 4.026 Textende direkt setzen mit (!Text) statt !Text.
+\ 4.050 Mit hierarchischem Try kann (muss!) try @text bleiben. 
+: ImportText
+     ProgTextfile  Modulfile is ProgTextfile  
+     try @Text                                        \ 4.049
+     is ProgTextfile  
+     tryError? if " - TextImportFehler -" Endmeldung then
+     TextEnde dup (!Text) !Textzeiger  ; 
+
+Word: ExportWort
+
+\ Der Worttext wird kopiert, indem Textzeiger und Handle nÅtzlich
+\ vertauscht werden. 4.026 ausfaktorisiert. 
+: ExportWort   ( feintrag -- )
+     %Wort is Modus CopyWort ExportText  ; 
+
+Word: ImportWort
+
+\ 4.026 Ausfaktorisiert. 4.049 ohne try's 
+: ImportWort   ( feintrag -- )
+     %Wort is Modus                     \ fÅr korrekten Texteintrag
+     CopyWort ImportText                \ 4.026
+     AktivWort dup is AlfaNachfolger
+     AktivWort AlfaEinhÑngen  ; 
+
+Word: GruppenEintrag
+
+\ Gruppeneintrag bilden. 
+: GruppenEintrag   
+     ,Eintrag dup KeineGruppen?
+     if   GruppenAnker InsertEintrag1
+     else AktivGruppe InsertEintrag
+     then is AktivGruppe  ; 
+
+Word: CopyText
+
+\ Textzeiger in den neuen Eintrag kopieren, da der Text von hier aus
+\ gerufen wird. Der Textzeiger wird nach dem Speichern des Textes im
+\ anderen Textfile mit dem neuen Wert Åberschrieben. 4.026 
+: CopyText
+     Import? if ImportText else ExportText then  ; 
+
+Word: CopyGruppe
+
+\ Die aktive Gruppe als neuen Eintrag bilden und alle Worte der Gruppe
+\ Åbertragen. 4.026 Mit Gruppentext. Textzeiger kopieren im Eintrag. 
+: CopyGruppe   ( fEintrag -- )
+     dup GruppenEintrag AktivGruppe 2dup CopyName CopyMGTextzeiger
+     %Gruppe is Modus Textzeiger if CopyText then
+     %Modul is Modus Gruppenzeigen 
+     dup fFirst                          ( Wortanker erstesWort -- )
+     begin     2dup <>
+               tryError? 0= and
+     while     dup Import? if ImportWort else ExportWort then
+               fNachfolger 
+     repeat 2drop  ; 
+
+Word: CopyModul
+
+\ Modul von Struktur in FreeSeg zu aktueller Struktur kopieren, Eintrag
+\ um Eintrag einbinden. 4.026 Mit Modultext. 
+: CopyModul
+     WortFenster wipe Deffenster wipe
+     %Modul is Modus Textzeiger if CopyText then
+     DasModul                           \ Gruppenanker
+     dup fFirst
+     begin     2dup <>  tryError? 0= and
+     while     dup CopyGruppe fNachfolger 
+     repeat 2drop  ; 
+
+Group: Export
+
+Word: ?ModulFile
+
+\ ôffnet neues Modulfile mit dem Namen des aktuellen Moduls. Falls ein
+\ solches File schon existiert, besteht Gelegenheit abzubrechen. 
+: ?ModulFile
+     Modulfile$ FileEx?
+     if   " Replace module file? (Y/N)" 
+          yes? 0= if endtry then
+          Modulfile$ set-r/w drop    
+          \ can't overwrite read-only file                   \ 4.902
+     then
+     Modulfile$ mkfile is Modulfile  ; 
+
+Word: InitModStruktur
+
+\ 4.026 Textzeiger kopieren. 
+: InitModStruktur
+     NeueStruktur                       
+     ,Eintrag    
+     dup ModulAnker InsertEintrag1 is AktivModul 
+     DasModul AktivModul 2dup CopyName CopyMGTextzeiger  ; 
+
+Word: CloseModul
+
+\ Modulstruktur auf Modulfile schreiben und File schliessen. 'V3' in
+\ erstes Wort, Offset zu Struktur in zweites Wort des Files. 68h
+\ Strukturzeiger 32bit lo hi b35-2 
+: CloseModul
+     Modulfile Filelength               \ d = Anfang von Struktur
+     ProgSeg 0 sEnde d>s        
+     Modulfile write drop               \ Struktur auf File
+     Modulfile FileReset
+     $3356 Modulfile !h                 \ 'V3'
+     swap Modulfile d!h                 \ Strukturoffset = lo hi  
+     Modulfile close drop  ; 
+
+Word: ExportModul
+
+\ ! try wird in Unterwort(en) verwendet, daher nicht en bloc mit try
+\ rufen. 4.026 Am Ende Modul und Text zeigen. 
+: ExportModul
+     AktivModul is DasModul  
+     ModulFileName try ?ModulFile  tryError? ?exit
+     0 Modulfile !h >16Grenze          \ erste 16 Bytes lîschen
+     " Exporting " Meldung Modulfile$ "type normal
+     false is Import?  true is Import/Export?  false is Vor?
+     UpdateStructure  
+     try AllocFreeseg tryError? ?exit  
+     f<=>s  try InitModStruktur try CopyModul CloseModul  f<=>s \ 4.049
+     Strukturfile Filelength is_sEnde
+     try ReleaseFreeseg  false is Import/Export? 
+     %Modul is Modus Listenzeigen .mgText  ; 
+
+Group: Import
+
+Word: ModfileEinlesen
+
+\ Oeffnet das Modulfile, testet die Version und liest die Struktur in das
+\ FreeSegment ein, liefert das Flag V3?. 68h Nur V3, kein Flag. 35-10 
+\ Strukturzeiger 32Bit lo hi. b35-2 Vergleich mit FreeSpace 35-11 
+: ModfileEinlesen   ( -- )
+     Modulfile Filelength    ( -- d )   \ FilelÑnge
+     Modulfile Filereset
+     Modulfile @h $3356 <>              \ V3?
+     if " Sorry, wrong module file" EndMeldung then      
+     Modulfile d@h swap                 \ Anfang-Struktur
+     2dup Modulfile lseek 2drop         \ Filezeiger zu Struktur
+     d- d>s                             \ LÑnge Struktur
+     dup 16 / freeSpace u>
+     if " Module structure too long" EndMeldung then
+     fSeg 0 rot Modulfile read drop       \ Struktur in freeseg lesen
+     ; 
+
+Word: LastItem
+
+0 integer LastItem 
+
+Word: ?linked
+
+\ Verfolgt Struktur fÅr max. 200 items. Endtry wenn kein Ende. / 35-15 
+: ?linked   ( anker -- )
+     dup 4 @f is LastItem
+     fFirst 200 0
+     do   dup LastItem = if drop leave&exit then fNachfolger loop
+     endtry  ; 
+
+Word: StrukturCheck
+
+\ Teste die Sruktur 100%, Gruppen und Worte. Mit Try gerufen, ?linked
+\ macht EndTry, daher Check beim ersten Fehler abgebrochen. 65i b32-2 
+: StrukturCheck
+     DasModul ?linked
+     DasModul dup fFirst
+     begin     2dup <>
+     while     dup ?linked fNachfolger
+     repeat 2drop  ; 
+
+Word: CopyDasModul
+
+\ Strukturtest vor Kopieren, nur in V3. V2 hat anderes Format, das lassen
+\ wir mal... 65i b32-2  68h V2 raus. 35-10  4.026 Textzeiger kopieren. 
+: CopyDasModul
+     try StrukturCheck tryError? 
+     if   " Sorry, structure of MOD-file is not correct" WarteMeldung
+     else DasModul AktivModul CopyMGTextzeiger try CopyModul \ 4.049
+     then  ; 
+
+Word: DoImport
+
+\ 5c1 Codefelder loeschen, update Struktur. 65i Strukturtest. b32-2 
+\ 68h Ohne V2, try ModfileEinlesen 35-10  4.026 Am Ende Modultext zeigen. 
+: DoImport
+     try AllocFreeseg tryError? ?exit
+     true is Import?  true is Import/Export?  false is Vor?
+     try ModfileEinlesen tryError? ?exit
+     1 is DasModul CopyDasModul tryError? 0=          
+     if   UpdateText UpdateStructure 
+          AktivModul ClearModul hash  
+          %Modul is Modus Listenzeigen .mgText 
+     then
+     false is Import/Export?  try ReleaseFreeseg  ; 
+
+Word: ImportModul
+
+\ [Nicht global mit try rufen, try wird intern verwendet in ImportWort]
+\ b35-3 FilelÑnge > 64k mîglich, Minimumtest Ñndern. 
+: ImportModul
+     Modulfilename FileEx?
+     if   " Importing " Meldung Modulfile$ "type normal
+          Modulfile$ open-r is Modulfile
+          Modulfile Filelength 16 um/ 7 <   \ Min. fÅr 1 Wort+Gruppe
+          if   " Sorry, MOD-file has wrong format" Wartemeldung
+          else DoImport
+          then Modulfile close drop  
+     else " Modulefile not found" WarteMeldung
+     then  ; 
+
+Group: ExportTextFile
+
+Word: CRLF
+
+: CRLF
+     13 emit 10 emit  0 is #out  ;                          \ 4.141 
+
+Word: mfEmit
+
+\ Zeichen c auf Modulfile schreiben 
+: mfEmit   ( c -- )
+     Modulfile c!h  1 add #out  ;                           \ 4.141 
+
+Word: mfType
+
+\ n Zeichen ab adr auf das Modulfile schreiben. 
+: mfType   ( adr n -- )
+     0 ?do dup i + c@ mfEmit loop drop  ; 
+
+Word: mfTypel
+
+\ n Zeichen ab seg:off auf das Modulfile schreiben. 
+: mfTypel   ( seg off n -- )
+     0 ?do 2dup i + c@l mfEmit loop 2drop  ; 
+
+Word: >modFile
+
+\ Textoutput auf Modulfile lenken. 
+: >modFile
+     make emit mfEmit 
+     make type mfType
+     make typel mfTypel  ; 
+
+Word: Textfilename
+
+\ 65g Erweiterung wird .MTX 33-27 
+: Textfilename
+     >Modulfile$  " .MTX" add Modulfile$   ;                \ 4.902 
+
+Word: ?TextFile
+
+: ?TextFile
+      TextFilename ?Modulfile  ;                       \ 4.902 
+
+Word: ComDelim$
+
+" \" String ComDelim$ 
+
+Word: ?.fComDelim
+
+: ?.fComDelim
+     Def? 0= ComDelim$ c@ and if print ComDelim$ space then  ; 
+
+Word: WriteBuf
+
+: WriteBuf
+     ?.fComDelim
+     blen 0
+     ?do  pos@ dup 14 = 
+          if   drop
+          else dup 14 < 
+               if   drop crlf ?.fComDelim
+               else emit
+               then
+          then
+     loop  ; 
+
+Word: WriteWort
+
+: WriteWort   ( eintrag -- )
+     is AktivWort @Text  
+     ." Word: " AktivWort .EName  crlf crlf
+     ComlÑnge 1 > if Comment WriteBuf crlf then
+     Definition Writebuf crlf crlf  ; 
+
+Word: WriteGruppe
+
+\ 4.022 Auch Gruppentext schreiben. 
+: WriteGruppe   ( eintrag -- )
+     is AktivGruppe ." Group: " AktivGruppe .EName crlf crlf
+     %Gruppe is Modus 
+     Textzeiger if @Text Definition WriteBuf crlf crlf then  \ 4.022
+     [char] . vEmit                           \ Fortschrittsanzeige
+     %Wort is Modus AktivGruppe doAll: WriteWort  ;         \ 4.022 
+
+Word: WriteModul
+
+\ 4.022 Auch Modultext schreiben. 
+: WriteModul
+     ." Module: " AktivModul .EName crlf crlf 
+     Textzeiger if @Text Definition WriteBuf crlf crlf then  \ 4.022
+     AktivModul doAll: WriteGruppe  ; 
+
+Word: ExportTextfile
+
+\ 4.022 Modul zurÅcksetzen. 
+: ExportTextfile
+     try ?TextFile tryError? ?exit
+     " Writing textfile " Meldung print Modulfile$
+     >modFile try WriteModul Modulfile close drop 
+     Screen %Modul is Modus Listenzeigen .mgText  ;   \ 4.022 
+
+Group: TFReadline
+
+Word: tfLineMax
+
+100 constant tfLineMax 
+
+Word: tfLine
+
+\ Zeilenpuffer fÅr Textfile. 
+create tfLine    tfLineMax allot 
+
+Word: GetTFByte
+
+\ Byte von Textfile lesen, bei Fileende Routine abbrechen mit EndTry. 
+: GetTFByte   ( -- c )
+     Modulfile c@h EOF? if endtry then  ; 
+
+Word: !tfLine
+
+\ Zeichen c in Zeile einsetzen, Fehler wenn Ende erreicht. 
+: !tfLine   ( c -- )
+     #tib tfLineMax <
+     if   tfLine #tib + c!  1 add #tib
+     else " Sorry, a textline is too long (max. 99 chars)" Endmeldung
+     then  ; 
+
+Word: ReadLine
+
+\ Textzeile von File einlesen bis CR.
+\ 61d CR an Ende hÑngen. 
+: ReadLine
+     0 is #tib
+     begin GetTFByte case
+           'tab of 5 #tib 5 mod - 0 do 'bl !tfLine loop endof
+           'cr of 'cr !tfline exit endof
+           'lf of endof
+           !tfLine endcase
+     again  ; 
+
+Word: Text>Buf
+
+\ Text aus Textfilezeile zu aktuellen Buffer kopieren. 
+: Text>Buf
+     blen #tib + BufLen >
+     if " Sorry, wordbuffer overflow" Endmeldung then
+     tfLine >in + buf blen + #tib >in - move  
+     blen #tib >in - + is blen  ; 
+
+Group: ImportTextfile
+
+Word: FirstWord
+
+\ Erstes Wort aus Textzeile in Word$ legen. 
+: FirstWord    
+     0 is >in  ParseWord  upcase Word$  ; 
+
+Word: "Module:"
+
+\ Modultoken. 
+" MODULE:" String "Module:" 
+
+Word: "Group:"
+
+" GROUP:" String "Group:" 
+
+Word: "Word:"
+
+" WORD:" String "Word:" 
+
+Word: Empty$
+
+" " String Empty$ 
+
+Word: NeuerText?
+
+\ true wenn ein neues Wort aufgebaut wird.
+\ 4.022 NeuesWort? => NeuerText? / true, wenn ein neuer Text aufgebaut
+\ wird. 
+Flag NeuerText? 
+
+Word: Definition?
+
+\ true wenn Text in Definition. 
+Flag Definition? 
+
+Word: InitText
+
+\ Textflags und Buffer nullen. 4.022 
+: InitText
+     clear Definition? 0 is ComlÑnge 0 is DeflÑnge  ; 
+
+Word: SetName
+
+\ Markiert den Wortnamen in der Definition. 
+: SetName
+     Defbuf is tib  0 is >in  DeflÑnge is #tib
+     begin >in #tib > ?exit ParseWord Word$ Name$ "= until
+     >in is cur -fw is cur  1 ?InsPlatz drop 14 curpos! 1 blen+  ; 
+
+Word: SetComDef
+
+\ Com- und Defbuffer fÅrs Speichern trimmen. 4.022
+\ 637 Auch in ComBuf ein Space einsetzen, wenn sonst kein Text.
+\ 637 LÑngen mit ClrEnd korrigieren. 
+: SetComDef
+     DefLÑnge 0= if 'bl Defbuf c! 1 is DeflÑnge then
+     ComLÑnge 0= if 'bl Combuf c! 1 is ComlÑnge then    
+     Comment ClrEnd is ComLÑnge
+     Definition ClrEnd is DefLÑnge  ; 
+
+Word: SaveTextwort
+
+\ Speichert das eingelesene Wort und hÑngt es in die Alfakette. 
+: SaveTextwort
+     SetComDef SetName TextEnde (!Text)      \ kein try!
+     AktivWort AlfaEinhÑngen WorteZeigen  ; 
+
+Word: SaveMGText
+
+\ mgText speichern am Textende. Bei Modul Text zeigen, bleibt sichtbar
+\ wÑhrend Import bis letztes Wort vorhanden. Kein Try, denn bei Fehler
+\ soll die ImportRoutine ganz abgebrochen werden. 4.022 
+: SaveMGText
+     SetComDef TextEnde dup (!Text) !Textzeiger   \ ohne try!
+     Modul? if ShowText then  ; 
+
+Word: ?SaveText
+
+\ 4.022 ?SaveWort => ?SaveText 
+: ?SaveText
+     NeuerText? 
+     if   tib >in #tib  
+          Wort? if SaveTextwort else SaveMGText then    \ 4.022
+          is #tib is >in is tib
+          clear NeuerText? 
+     then  ; 
+
+Word: MakeGruppe
+
+\ 637 Gruppenname darf Leerzeichen enthalten; Rest der Zeile ist Name. 
+: MakeGruppe
+     ?SaveText  false is vor? GruppenEintrag
+     tfLine >in + 1-               \ hier bauen wir einen String
+     #tib >in - 1-                 \ restliche Zeichen, ohne 'cr
+     over c!                       \ als Count von String einsetzen
+     AktivGruppe !Name             \ und String zu Name kopieren
+     InitText                      \ 4.022
+     GruppenZeigen  ; 
+
+Word: MakeWort
+
+\ 637 Flag Definition? lîschen.
+\ 4.022 %Wort is Modus 4.023 Worte zeigen nach Eintrag von Name. 
+: MakeWort
+     ?SaveText %Wort is Modus WortBilden                 \ 4.022 4.023
+     ParseWord Word$ AktivWort !Name  Word$ put Name$  
+     InitText set NeuerText?  ; 
+
+Word: ComText
+
+: ComText
+     Comment Text>Buf  ; 
+
+Word: DefText
+
+\ 637 Flag Definition?. 
+: DefText
+     0 is >in  Definition Text>Buf  set Definition? 
+     Wort? 0= if set NeuerText? then  ;                     \ 4.022 
+
+Word: ProcessLine
+
+\ Eingelesene Textzeile verarbeiten.
+\ 637 Kommentarzeichen in Definition korrekt kopieren.
+\ 637 Leerzeilen in Definition zulassen.
+\ 4.022 Modul- und Gruppentext einlesen. 
+: ProcessLine
+     FirstWord 
+     Word$ case
+     "Module:" "of %Modul is Modus endof
+     "Group:"  "of MakeGruppe %Gruppe is Modus endof
+     "Word:"   "of MakeWort endof
+     ComDelim$ "of Definition? if Deftext else Comtext then endof
+     Empty$    "of Definition?
+                   if 'cr buf blen + c! blen 1+ is blen then endof
+     drop DefText endcase  ; 
+
+Word: ReadTextfile
+
+\ Liest das Textfile ein bis zum Fileende (bricht mit EndTry ab) oder
+\ Escape. 
+\ 4.022 DeflÑnge und ComlÑnge nullen. 
+: ReadTextfile
+     tfLine is tib  InitText
+     begin ReadLine ProcessLine Esc? until  ; 
+
+Word: ImportTextEintrÑge
+
+\ Try auf dieser Ebene, damit das Modulfile auf jeden Fall wieder
+\ geschlossen wird. 4.022 ohne Hash. 
+: ImportTextEintrÑge
+     set Import?  set Import/Export?
+     Modulfile$ open-r is Modulfile                         \ 4.902
+     try ReadTextfile  try ?SaveText   
+     Modulfile close drop  clear Import/Export?  ; 
+
+Word: ImportTextfile
+
+: ImportTextfile
+     Textfilename 
+     Modulfile$ FileEx?
+     if   ImportTextEintrÑge
+     else " Sorry, textfile not available" KurzMeldung
+     then  ; 
+

@@ -1,0 +1,223 @@
+Module: Drivers
+
+Group: COM driver
+
+Word: ComPort
+
+Text: ComPort
+   An interrupt driven buffered COM port driver. 
+
+Word: Com
+
+\ The address of the COM port. Initialized for COM2. 
+$3F8 integer Com 
+
+Word: Com#
+
+\ The number of the COM port {1,2,3,4}. The number must correspond to the
+\ address in COM. -- The Com driver is simpler and faster, if we separate
+\ COM and COM#, instead of deriving one from the other. Better let the
+\ setup routine take care of keeping COM and COM# in tune. 
+1 integer Com# 
+
+Word: Com13?
+
+\ true if COM = COM1 or COM3. 
+: Com13?   ( -- f )
+     Com# 2 mod  ; 
+
+Word: ComVec
+
+\ The Com port vector. 
+: ComVec   ( -- d )
+     0 Com13? if $30 else $2C then  ; 
+
+Word: BaudRate
+
+9600 integer BaudRate 
+
+Word: BaudCode
+
+\ Hardware code for the chosen baud rate. 
+: BaudCode   ( -- u )
+     115.200 BaudRate um/  ; 
+
+Word: InitComPort
+
+\ Initializes the Com port to 8 data and 1 stop bit, and no parity. The
+\ baud rate is set to the current BaudRate. 
+: InitComPort
+     cli  
+     $80 Com 3 + p!                     \ Line Control Register
+     BaudCode Com p!  0 Com 1+ p!       \ 0C=9,6  06=19,2 kB
+     $03 Com 3 + p!                     \
+     $0C Com 4 + p!                     \ Modem Control Register:
+                                        \ Out2=H, out1=H, RTS=L, DTR=L
+     sti  ; 
+
+Word: ComLen
+
+\ Length of the receive buffer. 
+128 constant ComLen 
+
+Word: Com-Buf
+
+create Com-Buf   comlen allot 
+
+Word: ComHead
+
+\ Points to the last character received. 
+0 integer ComHead 
+
+Word: ComTail
+
+\ Points to the last character read from the buffer. 
+0 integer ComTail 
+
+Word: ComISR
+
+\ The com port interrupt service routine. 
+Label ComISR
+     sti  
+     push ax  push bx  push dx  push ds
+     mov ax, cs  mov ds, ax
+     mov dx, adr Com word  in al, dx  
+     mov bx, adr ComHead word
+     inc bx  and bx, # ComLen 1- word
+     mov Com-Buf [bx], al
+     mov adr ComHead bx word 
+     mov al, # $20  out $20 al
+     pop ds  pop dx  pop bx  pop ax
+     iret 
+
+Word: OldComVec
+
+0. double OldComVec 
+
+Word: InitComISR
+
+: InitComISR
+     cli
+     ComVec 2@l is OldComVec            \ save old com vector
+     cs: ComISR ComVec 2!l              \ set IRQ3 or 4
+     $21 p@ Com13? 
+     if $EF else $F7 then and $21 p!    \ enable IRQ3/4 in 8259
+     1 Com 1+ p!                        \ DataAvailable IRQ
+     0 is ComHead  0 is ComTail 
+     Com-Buf ComLen 'bl fill
+     $20 dup p!                         \ activate 8259
+     sti  ; 
+
+Word: ResetComISR
+
+: ResetComISR
+     OldComVec ComVec 2!l
+     $21 p@ Com13? if $10 else 8 then or $21 p!
+     0 Com 1+ p!  ; 
+
+Word: !com
+
+\ Waits for the output register to be empty, and writes c into register. 
+: !com   ( c -- )
+     begin Com 5 + p@ $20 and until  Com p!  ; 
+
+Word: ComData?
+
+\ Flag is true if new data have been received. 
+: ComData?   ( -- f )
+     ComHead ComTail <>  ; 
+
+Word: <ComLen>
+
+: <ComLen>   ( n1 -- n2 )
+     ComLen + Comlen 1- and  ; 
+
+Word: @ComData
+
+\ Fetches character c at ComTail. 
+: @ComData   ( -- c )
+     ComTail 1+ <comlen> dup is ComTail
+     Com-Buf + c@  ; 
+
+Word: @com
+
+\ Waits until a character is available and delivers it. The Esc key
+\ interrupts the routine. [Must delay ?Escape, because of Pentium problem
+\ with key?]. 
+: @com   ( -- c )
+     now begin 1000 msec? if ?Escape then ComData? until @ComData  ; 
+
+Word: ClrCom
+
+\ Clears the receive buffer. 
+: ClrCom
+     clear ComHead clear ComTail  ; 
+
+Word: OpenComPort
+
+: OpenComPort
+     InitComPort InitComISR  ; 
+
+Word: CloseComPort
+
+: CloseComPort
+     ResetComISR  ; 
+
+Group: LPT driver
+
+Word: PNT
+
+Text: PNT
+   We address the standard printer PNT as a character device via DOS
+call 21h, function 40h. The device PNT is already opened by DOS. 
+
+Word: PrinterMessage
+
+Doer PrinterMessage 
+
+Word: PMessage
+
+: PMessage
+     Screen  " Printer error" ErrMsg  ; 
+
+Word: SetPMsg
+
+( SetPMsg )
+     make PrinterMessage PMessage 
+
+Word: CharLoc
+
+\ Space for the print character. 4.088 
+Label CharLoc
+     0 , 
+
+Word: !pnt
+
+\ Writes character c to the standard print device PNT. Returns f=1 if
+\ success. 4.088 
+Code !pnt   ( c -- f )
+     pop dx  mov CharLoc dx             \ store c
+     mov dx, # CharLoc
+     mov cx, # 1                        \ number of chars
+     mov bx, # 4                        \ device no. 4 = PNT
+     mov ah, # $40                      \ function 40h = write device
+     int $21
+     jmp ?doserr 
+
+Word: pEmit
+
+\ Prints character c. 4.088 
+: pEmit   ( c -- )
+     !pnt 1 <> if PrinterMessage then  1 add #out  ; 
+
+Word: pTypel
+
+\ Prints n characters of the text at seg off. 
+: pTypel    ( seg off n -- )
+     0 ?do 2dup i + c@l pemit loop 2drop  ; 
+
+Word: Printer
+
+: Printer
+     make emit pEmit  make typel pTypel  ; 
+

@@ -1,0 +1,467 @@
+Module: Print
+
+Group: Basics
+
+Word: PrinterError
+
+: PrinterError
+     Screen  " Sorry, printer not ready" KurzMeldung EndTry  ; 
+
+Word: SetPrinter
+
+\ Printer initialisieren und auf Bereitschaft testen auf LPT1: 
+: SetPrinter
+     make PrinterMessage PrinterError  
+     Printer  ; 
+
+Word: PZeile
+
+\ ZeilenzÑhler beim Drucken 
+0 integer PZeile 
+
+Word: Seite
+
+\ SeitenzÑhler beim Drucken einer Gruppe 
+0 integer Seite 
+
+Word: Zeilen/Seite
+
+72 integer Zeilen/Seite 
+
+Word: LetztePZeile
+
+: LetztePZeile   ( -- n )
+     Zeilen/Seite 10 -  ; 
+
+Word: PrintDate
+
+: PrintDate
+     "Date "type  ; 
+
+Word: i(Gruppe)
+
+\ Laufende Nummer der Gruppe im Modul 
+: i(Gruppe)   ( -- i )
+     Gruppenanker AktivGruppe i(Eintrag)  ; 
+
+Word: ./
+
+\ 35n Ohne Spaces um /. 
+: ./
+\     space 47 emit space  ; 
+     47 emit  ;                         \ 5.003 
+
+Word: Paper?
+
+\ Normalerweise true, false beim "Drucken" in eine Datei. 4.137 
+Flag Paper? 
+
+Word: EinrÅcken
+
+\ Bei Drucken in File ist Mark? false. Dann nicht einrÅcken. 
+: EinrÅcken
+     Paper? if 6 spaces then  ; 
+
+Word: PrintKopf
+
+: PrintKopf
+     cr  EinrÅcken 
+     ProgName "type ./ AktivModul .EName ./ AktivGruppe .EName
+     #out 2+ 38 max #out - spaces PrintDate 
+     #out 2+ 66 max #out - spaces ." Page " i(Gruppe) .    \ 4.155
+     Seite if Seite 96 + emit then 1 add Seite
+     cr cr cr 5 is PZeile  ; 
+
+Word: FormFeed
+
+: FormFeed
+     12 emit  ; 
+
+Word: NeueSeite
+
+: NeueSeite
+     FormFeed PrintKopf  ; 
+
+Word: +PZeile
+
+: +PZeile
+     cr 1 add pZeile  ; 
+
+Word: pZeilen
+
+: pZeilen   ( u -- )
+     0 ?do +pZeile loop  ; 
+
+Group: Formatierung
+
+Word: PStart$
+
+36 Stringbuf PStart$ 
+
+Word: GroupOn$
+
+10 Stringbuf GroupOn$ 
+
+Word: GroupOff$
+
+10 Stringbuf GroupOff$ 
+
+Word: NameOn$
+
+10 Stringbuf NameOn$ 
+
+Word: NameOff$
+
+10 Stringbuf NameOff$ 
+
+Word: StartDruck
+
+: StartDruck
+     print PStart$  ; 
+
+Word: MarkGruppe
+
+: MarkGruppe
+     Paper? if print GroupOn$ then  ;    \ 4.137 
+
+Word: /MarkGruppe
+
+: /MarkGruppe
+     Paper? if print GroupOff$ then  ;   \ 4.137 
+
+Word: MarkName
+
+: MarkName
+     Paper? if print NameOn$ then  ;     \ 4.137 
+
+Word: /MarkName
+
+: /MarkName
+     Paper? if print NameOff$ then  ;    \ 4.137 
+
+Word: ?Delimiter
+
+\ Bei Comment Delimiter drucken, wenn er existiert, dann auch space
+\ dahinter. [s. ComDelim$ bei Module/ExportText]. 
+: ?Delimiter
+     EinrÅcken Def? 0= ComDelim$ c@ and Gruppe? or 
+     if print ComDelim$ space then  ; 
+
+Word: name?
+
+\ true wÑhrend Drucken von Name 
+0 integer name? 
+
+Word: PrintBuf
+
+: PrintBuf
+     ?Delimiter  blen 0
+     do   pos@ dup 14 =                      
+          if   drop MarkName true is name?
+          else dup 33 < name? and if /MarkName false is name? then
+               dup 12 = if 1+ then      
+               dup 13 = if drop +pZeile ?Delimiter else emit then 
+          then                                              \ 4.234
+     loop  ; 
+
+Word: PlatzKontrolle
+
+: PlatzKontrolle
+     Definition Textzeilen Comment Textzeilen +
+     dup 3 / -           \ bei grossen Worten mehr Platz zulassen
+     LetztePZeile pZeile - >
+     if NeueSeite then  ; 
+
+Group: PrintGruppe
+
+Word: PrintMsg
+
+: PrintMsg   ( eintrag -- )
+     " Printing: " EMeldung normal  ; 
+
+Word: PrintDasWort
+
+: PrintDasWort   ( eintrag -- )
+     is AktivWort @Text PlatzKontrolle
+     ComLÑnge 1 > if Comment PrintBuf +pZeile then
+     Definition PrintBuf 
+     LetztePZeile PZeile - 2 min 0 max pZeilen  ; 
+
+Word: DoPrintWort
+
+: DoPrintWort
+     decimal AktivWort PrintMsg  0 is Seite
+     setPrinter  StartDruck  PrintKopf 
+     AktivWort PrintDasWort FormFeed 1sec  ; 
+
+Word: PrintWort
+
+\ Einzelnes Wort auf eigene Seite drucken. 
+: PrintWort
+     try DoPrintWort  Screen  ; 
+
+Word: PrintWorte
+
+: PrintWorte   ( gruppe -- )
+     %Wort is Modus  doAll: PrintDasWort  ; 
+
+Word: PrintGruppeText
+
+\ Gruppentext drucken. 4.019 4.037 4.110 
+: PrintGruppeText
+     %Gruppe is Modus TextZeiger 0= ?exit 
+     @Text DefLÑnge 2 < ?exit            \ 4.120
+     2 pZeilen Definition PrintBuf  ; 
+
+Word: PrintDieGruppe
+
+\ Mit Gruppentext. 
+: PrintDieGruppe   ( eintrag -- )
+     is AktivGruppe  0 is Seite PrintKopf
+     EinrÅcken MarkGruppe AktivGruppe .EName /MarkGruppe
+     PrintGruppeText 2 pZeilen 
+     AktivGruppe PrintWorte FormFeed  ; 
+
+Word: DoPrintGruppe
+
+: DoPrintGruppe
+     decimal AktivGruppe PrintMsg  true is Paper?  \ 4.137
+     SetPrinter StartDruck 
+     AktivGruppe PrintDieGruppe 1sec  ; 
+
+Word: PrintGruppe
+
+\ [Modus umschalten und Text auffrischen.] 
+: PrintGruppe
+     try DoPrintGruppe  Screen %Gruppe is Modus .mgText  ; 
+
+Group: PrintModul
+
+Word: PrintInhaltKopf
+
+\ Kopfzeile fÅr die Inhaltsseite = Seite 0 von Modullisting. Vorbereitet
+\ fÅr mehrere Inhaltsseiten. 4.019 
+: PrintInhaltKopf
+     cr  EinrÅcken 
+     ProgName "type ./ AktivModul .EName 
+     #out 3 + 38 max #out - spaces PrintDate 
+\     66 #out - spaces ." Page 0"                           \ 4.141
+     Seite if Seite 96 + emit then 1 add Seite
+     cr cr cr 5 is PZeile  ; 
+
+Word: ?InhaltPlatz
+
+\ Wenn auch der Gruppentext im Inhalt gedruckt wird, reicht eine Seite
+\ wahrscheinlich nicht aus. -- vorerst ohne Text. 4.019 
+: ?InhaltPlatz
+     Definition Textzeilen 1+ LetztePZeile pZeile - >
+     if FormFeed PrintInhaltKopf then  ; 
+
+Word: PrintModulText
+
+\ Modultext drucken. 4.019 4.037 
+: PrintModulText
+     %Modul is Modus TextZeiger 0= ?exit 
+     @Text 2 pZeilen Definition PrintBuf  ; 
+
+Word: PrintGruppeName
+
+\ Den Namen der Gruppe eintrag drucken zusammen mit der Gruppennummer
+\ (Reihenfolge) im Modul. 4.019 
+: PrintGruppeName   ( eintrag -- )
+     is AktivGruppe 2 pZeilen 
+     EinrÅcken i(Gruppe) 2 .r ." . " AktivGruppe .EName  ; 
+
+Word: PrintInhalt
+
+\ Inhaltsseite drucken, besteht aus Modultext und Gruppennamen. 4.019 
+: PrintInhalt
+     0 is Seite PrintInhaltKopf
+     EinrÅcken MarkGruppe ." Module " AktivModul .EName /MarkGruppe
+     PrintModulText 2 pZeilen 
+     EinrÅcken MarkGruppe ." Groups" /MarkGruppe
+     AktivModul doAll: PrintGruppeName 
+     FormFeed  ; 
+
+Word: PrintDasModul
+
+\ Modul drucken mit Inhaltsseite. 4.019 
+: PrintDasModul
+     StartDruck PrintInhalt AktivModul doAll: PrintDieGruppe  ; 
+
+Word: DoPrintModul
+
+: DoPrintModul
+    decimal true is Paper?   
+    AktivModul PrintMsg SetPrinter PrintDasModul 1sec  ; 
+
+Word: PrintModul
+
+\ [Modus umschalten. Und Text auffrischen.] 
+: PrintModul   
+     try DoPrintModul Screen %Modul is Modus .mgText  ; 
+
+Group: PrintModulfile
+
+Das Modul als ein Textfile drucken. 
+Ohne Markierung der Namen, da unabhÑngig von einem Drucker. 
+
+Word: SetPrintfile
+
+\ 4.137 
+: SetPrintfile
+     >Modulfile$ " .TXT" add Modulfile$ 
+     Modulfile$ mkfile is Modulfile
+     >modfile  ; 
+
+Word: DoPrintModulfile
+
+\ 4.137 
+: DoPrintModulfile
+     decimal false is Paper? SetPrintfile PrintDasModul 
+     Modulfile close drop  ; 
+
+Word: PrintModulfile
+
+\ Modul-Befehl Sft+F4. Schreibt den Modultext ohne Markierungen auf das
+\ File <module>.TXT. 4.137 
+: PrintModulfile
+     try DoPrintModulfile Screen %Modul is Modus .mgText  ; 
+
+Group: Setup
+
+Word: PntSetupMenu
+
+: PntSetupMenu
+     1 Feld" Help"
+     2 Feld" Edit"
+     8 3 do i Feld" " loop
+     8 Feld" Exit"  ; 
+
+Word: PntSetupText
+
+: PntSetupText
+     10  3 wxy ." Starting code  : " 
+     10  4 wxy ." Group code on  : " 
+     10  5 wxy ." Group code off : " 
+     10  6 wxy ." Name code on   : " 
+     10  7 wxy ." Name code off  : " 
+     10  8 wxy ." Comment delim. : " 
+     10  9 wxy ." Lines per page :        (Letter=66, A4=72)"
+4 13 wxy ." Choose field with up/down keys, press F2 or ENTER to edit"
+7 14 wxy ." Accept field with ENTER, exit setup with F8 or ESC"
+     ; 
+
+Word: pIndex
+
+0 integer pIndex 
+
+Word: maxPIndex
+
+7 constant maxPIndex 
+
+Word: pxy
+
+: pxy  
+     27 3 pIndex + wxy  ; 
+
+Word: Z/S$
+
+" 72" String Z/S$ 
+
+Word: SetZ/S$
+
+: SetZ/S$
+     decimal Zeilen/Seite 0 <# # # "#> put Z/S$  ; 
+
+Word: @PFeld
+
+: @PFeld
+     pxy  pIndex case
+     0 of obj PStart$ endof
+     1 of obj GroupOn$ endof
+     2 of obj GroupOff$ endof
+     3 of obj NameOn$ endof
+     4 of obj NameOff$ endof
+     5 of obj ComDelim$ endof
+     6 of obj Z/S$ endof
+     drop endcase is "obj  ; 
+
+Word: .PFeld
+
+: .PFeld
+     @PFeld "len 0= if ."  " else "obj "print then  ; 
+
+Word: >PFeld
+
+: >PFeld   ( n -- )
+     .pFeld pIndex + maxPIndex + maxPIndex mod is pIndex
+     inverse .pFeld normal  ; 
+
+Word: PntFelder
+
+: PntFelder
+     maxPIndex 0 do i is pIndex .pFeld loop  1 >pFeld  ; 
+
+Word: DoPEdit
+
+: DoPEdit   
+     inverse pIndex 6 <>
+     if   "obj "edit 
+     else begin "obj "edit Z/S$ number? 0=
+          while 2drop 7 emit pxy
+          repeat drop is Zeilen/Seite
+     then
+     normal $show  ; 
+
+Word: EditPFeld
+
+: EditPFeld
+     @PFeld doPEdit 0 >PFeld  ; 
+
+Word: PntSetInit
+
+: PntSetInit
+     PntSetupMenu PntSetupFenster Fensterrahmen
+     >rahmen 23 0 wxy ."  PRINTER SETUP " normal
+     PntSetupText  PntFelder  ; 
+
+Word: >Info
+
+Doer >Info 
+
+Word: InitDiablo
+
+\ Diablo Codes als Anfangswerte wÑhrend Entwicklung. 
+: InitDiablo
+     2 GroupOn$ c!   $451B GroupOn$ 1+ !
+     2 GroupOff$ c!  $521B GroupOff$ 1+ !  
+     2 NameOn$ c!    $4F1B NameOn$ 1+ ! 
+     2 NameOff$ c!   $261B NameOff$ 1+ !   ; 
+
+Word: DoPntSetup
+
+: DoPntSetup
+     begin     key ?dup
+               if   case
+                    'Esc of Oldmodus is Modus  exit endof
+                    'cr of EditPFeld endof
+                    ^P of InitDiablo PntFelder endof        \ 4.147
+                    drop endcase
+               else case
+                    F1 of " Ctl+Sft+F4" >Info exit endof    \ 4.096
+                    F2 of EditPFeld endof
+                    F8 of Oldmodus is Modus  exit endof
+                    'up of -1 >PFeld endof
+                    'down of 1 >PFeld endof
+                    drop endcase
+               then
+     again  ; 
+
+Word: PrinterSetup
+
+: PrinterSetup
+     SaveScreen  SetZ/S$ PntSetInit true is PSeq?
+     DoPntSetup
+     false is PSeq? RestoreScreen  ; 
+

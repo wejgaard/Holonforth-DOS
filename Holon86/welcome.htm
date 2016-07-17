@@ -1,0 +1,273 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<meta name="GENERATOR" content="Microsoft FrontPage 4.0">
+<title>Welcome to Holon 86</title>
+</head>
+
+<body>
+
+<p><font face="arial, helvetia" size="5">Welcome to Holon 86&nbsp;</font></p>
+
+<font
+face="arial, helvetia" size="2">
+
+<blockquote>
+  <blockquote>
+    <p><i>This fully functional version of Holon 86 is offered for free
+    study and use.</i></p>
+    </blockquote>
+</blockquote>
+
+<h4>Installation </h4>
+
+<blockquote>
+  <p>Store the uncompressed files in one common directory. That's all.</p>
+
+<h5>Holon Files</h5>
+
+  <ul>
+    <li>HOLON86.EXE&nbsp; is the development environment (the host). </li>
+  </ul>
+  <ul>
+    <li>HOLON86.STR and HOLON86.TEX contain the source text of the target program. </li>
+  </ul>
+  <ul>
+    <li>HOLON86.COD&nbsp;contains the code image of the target program. </li>
+  </ul>
+  <ul>
+    <li>HOLONHLP.STR&nbsp;and HOLONHLP.TEX contain the online manual. </li>
+  </ul>
+  <ul>
+    <li>WMON86.EXE&nbsp;is the target monitor for a DOS window. </li>
+  </ul>
+  <ul>
+    <li>RMON86.EXE&nbsp; is the target monitor for a separate PC, serial port COM1:. </li>
+  </ul>
+</blockquote>
+
+<h4>Starting Holon</h4>
+
+<blockquote>
+  <p>Holon runs under DOS. When HOLON86.EXE starts, the program looks for the files HOLON86.STR
+  and HOLON86.TEX in the<em> </em>working directory. </p>
+</blockquote>
+
+<blockquote>
+  <ul>
+    <li><em>Starting from the DOS command promp</em><u>t</u>: Change the current directory to
+      the Holon directory, then run HOLON86.EXE. </li>
+  </ul>
+  <blockquote>
+    <blockquote>
+      <p>Problems have been reported with starting from the DOS command prompt in Windows NT.
+      Then, start Holon from Explorer.</p>
+    </blockquote>
+  </blockquote>
+  <ul>
+    <li><em>Starting from Explorer:</em> Click on HOLON86.EXE, the working directory is set
+      correctly by Explorer.</li>
+  </ul>
+  <ul>
+    <li><em>Starting with an Icon</em>: If you create an icon on the desktop, set up the working
+      directory in the Properties/Program options.</li>
+  </ul>
+</blockquote>
+
+<ul>
+  <p>HOLON86 starts and shows the welcome screen.</p>
+</ul>
+
+<blockquote>
+  <blockquote>
+    <p>If you see an empty browser and the question: &quot;Create a new application?
+    Y/N&quot;, then HOLON86 has not found the program files .STR and .TEX, probably because
+    the working directory is not set to the Holon directory. Press N and restart Holon in a
+    different way.</p>
+  </blockquote>
+
+<h5>Operating Holon</h5>
+
+  <p>You see the source text of the target program in a browser, clearly structured into
+  modules, groups, and words. The middle panes show the definition and comment of the
+  current word. At the bottom the stack pane is used for interactive testing. </p>
+</blockquote>
+
+<blockquote>
+  <ul>
+    <li>Use the cursor keys to move around in the browser. </li>
+  </ul>
+</blockquote>
+
+<blockquote>
+  <p>Below the stack pane a&nbsp; function key menu is presented. <ul>
+    <li>Press the <em>Ctrl</em> key to see other commands, e.g. Ctrl+F7=Turnkey (creates a
+      self-starting EXE file).</li>
+    <li>More functions are available with&nbsp;the <em>Alt</em> key and the <em>Ctrl+Sft</em>
+      key combination. </li>
+  </ul>
+
+<h5>Testing Holon </h5>
+
+  <p>HOLON86 includes two sample programs: HelloWorld and Tetris. Try HelloWorld
+  first; that's always a good start. HelloMain is the main program word of HelloWorld. <ul>
+    <li>Go to the module HelloWorld, group Program, word HelloMain. See the definition and
+      comment of HelloMain in the TEXT pane. You are here already, if you haven't moved around
+      in the browser yet.</li>
+    <li>Press F4=Run and see the welcome message. </li>
+    <li>Press &lt;Esc&gt; to end the program. </li>
+  </ul>
+  <p>Change the welcome message:<ul>
+    <li>Go to the word HelloMessage a few words above HelloMain.</li>
+    <li>Press F2=Edit to edit the definition of the word. </li>
+    <li>Change the welcome text inside the quote marks, say add&nbsp; <em>..how nice....</em></li>
+    <li>Press F3=Load to reload this word. </li>
+    <li>Go back to HelloMain and run the program again (F4=Run).</li>
+    <li>See the program display the new message, although you didn't reload the whole program.</li>
+  </ul>
+  <p>When you reload a word, Holon generates new code for this word and exchanges the code
+  in the existing code image. </p>
+  <p>Now, have a look at Tetris as an example of a real application. The main word is <em>Tetris</em>.<ul>
+    <li>Let's go to <em>Tetris</em>. Try a new method for looking up a word: Press the &lt;space&gt; bar and type the name
+      of the word:&nbsp; t e t r i s . After each new character Holon selects the first
+      word in the target that starts with the characters that you have entered. Note the
+      characters on the lower line of the browser</li>
+    <li>With the word Tetris selected, press F4=Run. </li>
+    <li>Play a little, use the cursor keys to manipulate the pieces.</li>
+    <li>Press Q to return to Holon (press N at the question).</li>
+  </ul>
+  <p>&nbsp;</p>
+
+<h5>Online Manual </h5>
+
+  <p>Press F1 to enter the <em>online manual</em>, which provides a detailed description of the operation
+  of Holon 86. The manual can easily be printed. Note the hints in the chapter <i>Setup</i>, section
+  <i>Printer</i>.</p>
+
+  <h5>Forth</h5>
+
+  <p>If you are familiar with Forth, you will feel at home rapidly. You can import your
+  existing Forth programs into Holon. Lookup the details in the chapter <i>Edit</i>, section
+  <i>Export/Import</i>.</p>
+  <p>If you are new to Forth, Holon makes it easy to adapt. Study the programs and the
+  system modules. Try the words. Every detail of the target system is clearly defined and
+  commented. Nothing is hidden in Holon. The section <i> Forth</i> in the chapter
+  <i> Develop</i> describes all Forth word types that are available in Holon. See
+  also the tutorial <a
+  href="http://holonforth.com/using/useholon.exe">Using Holon</a>, which provides a quick
+  introduction to working with Holon and Forth. </p>
+</blockquote>
+
+<h4>&nbsp;</h4>
+
+<h4>Workspaces</h4>
+
+<blockquote>
+  <p>In the test so far, the application runs in the DOS memory space above the host.
+  Application and host are coroutines. This is indicated in the browser at the lower right
+  by &quot;COR&quot;. </p>
+  <p>Holon 86 makes it easy to shift between the application (target) and the host. When you
+  run the application, the DOS window belongs to the target. When the application ends, the
+  DOS window returns to the host.</p>
+  <p>But Holon 86 also provides two other workspaces for the target: The target can operate
+  in a <em>separate DOS window</em> or in a <em>separate PC.</em> This is a unique feature
+  of Holon 86, which offers important benefits: <ul>
+    <li>You always see both the definition of the program and the running program itself. </li>
+    <li>You can work interactively on the running target program.</li>
+    <li>The target has the full DOS memory space available.</li>
+  </ul>
+  <p>&nbsp;</p>
+  <h5>Run the application in a separate DOS window.</h5>
+
+  <ul>
+    <li>Start the program WMON86.EXE. WMON is a monitor that communicates with Holon 86. The
+      application is built on top of WMON.</li>
+    <li>Setup Holon 86 for the new target space: Press Ctrl+F3=System. Select target system =
+      &quot;DOS window&quot; (press &lt;space&gt;). Press F8 or &lt;Esc&gt; to exit.</li>
+  </ul>
+  <blockquote>
+    <p><img src="welcome.gif" alt="Setup Target " width="492" height="231"></p>
+  </blockquote>
+  <ul>
+    <li>&quot;COR is replaced by &quot;WIN&quot;, and a blinking dot indicates communication
+      with the target window.</li>
+    <li>The host downloads the program code to the new target memory. You may have noted the
+      display of code and list addresses. If this went too fast, you can repeat the downloading
+      of code to the target with the command Ctrl+Sft+F7=Download.</li>
+  </ul>
+  <blockquote>
+    <blockquote>
+      <p>You may need to set up the scheduling of
+      the DOS windows.&nbsp;<br>
+      In Win 95/98 set Properties/Misc: Always_suspend=no </p>
+    </blockquote>
+  </blockquote>
+  <p>You are now ready to cross-develop a program between two DOS windows.<ul>
+    <li>Try the <em>HelloWorld</em> program first. Select <em>HelloMain</em> and press F4=Run.
+      The host starts the program in the target and waits for the program to end. The host shows
+      a white square instead of the blinking point while it is waiting.</li>
+    <li>Press &lt;Esc&gt; to regain control of the host. The host stops waiting for the target,
+      but the target is still occupied with the application and does not communicate with the
+      host now. We are &quot;offline&quot;.</li>
+    <li>Stop the program (press &lt;Esc&gt; in the target window). The program returns control
+      to the target monitor, which communicates again with the host (&quot;online&quot;).</li>
+  </ul>
+  <p>The WMON monitor is able to multitask with the application. If the application runs as
+  a task, the monitor remains online and you can continue development while the program
+  runs.&nbsp;<ul>
+    <li>Go to the word StartUserTask. </li>
+    <li>Press F4=Run to start the task. Note that the host remains active while the HelloWorld
+      program runs.</li>
+    <li>Change the message. Go to <em>HelloMessage</em>, press F2=Edit to enter the definition,
+      change the text, and press F3=Load to reload the word. </li>
+    <li>Watch your new message in the target window. Holon has substituted the code in the
+      running target program (if the word was loaded correctly).</li>
+  </ul>
+  <p>Maybe you think that it is no problem to change a string in a running program, it's
+  only data isn't it?&nbsp;
+  <p>Thus let us change some real code in Tetris. Run Tetris as a task, but stop
+  the HelloWorld task first:<ul>
+    <li>Execute <em>StopUserProg</em> (go to the word StopUserProg, press F4=Run).</li>
+    <li>Start the Tetris task: go to <em>TetrisTask</em> and press F4.</li>
+    <li>Play a little with Tetris in the target window.</li>
+    <li>You may already have noted that the &lt;up&gt; key is not working. The &lt;up&gt; key is
+      designed to rotate the pieces. Correct this 'bug' now on the running program.</li>
+    <li>The cursor key functions are handled in the word <em>FuncCases</em>. Enter the
+      definition of FuncCases and delete the backslash in front of the line that handles the
+      &quot;up&quot; case (c = 72). The backslash turns the line into a comment. Therefore the
+      &quot;up&quot; case has not been loaded.</li>
+    <li>Load the word and try the &lt;up&gt; key in the target program.</li>
+    <li>Change other commands and parts in the program. As you see, every change is immediately
+      effective. In Holon you can instantly test whatever you have done. </li>
+  </ul>
+
+<h5>Running the application in a separate PC</h5>
+
+  <p>If you have a separate PC available, load and run RMON86.EXE on the second PC under
+  DOS. Connect both PCs with a serial communication line. Change the target platform in the
+  system setup. The monitor RMON86 uses the serial port COM1. On the host you can choose
+  among the ports COM1..COM4. </p>
+</blockquote>
+
+<blockquote>
+  <p>This setup is ideal for the development of applications for embedded PCs.</p>
+</blockquote>
+
+</font>
+  <font
+face="arial, helvetia" size="2">
+  <hr size="1">
+
+    <h4>Additional information 
+  </h4>
+<blockquote>
+<a href="http://holonforth.com">http://holonforth.com</a> 
+  </p>
+
+<p> Copyright (c) 1995-2003 Wolf Wejgaard, All Rights Reserved.
+</blockquote>
+
+
+</body>
+</html>

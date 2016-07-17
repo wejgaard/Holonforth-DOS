@@ -1,0 +1,1716 @@
+Module: Ass-86
+
+Group: Labels
+
+Word: Voc=Assembler
+
+( Voc=Assembler )
+     Assembler 
+
+Word: DstTyp
+
+\ Destination Typ 
+0 integer DstTyp 
+
+Word: SrcTyp
+
+\ Source Typ 
+0 integer SrcTyp 
+
+Word: DstReg
+
+0 integer DstReg 
+
+Word: SrcReg
+
+0 integer SrcReg 
+
+Word: WSize
+
+0 integer WSize 
+
+Word: DstSize
+
+0 integer DstSize 
+
+Word: SrcSize
+
+0 integer SrcSize 
+
+Word: SrcDisp
+
+0 integer SrcDisp 
+
+Word: DstDisp
+
+0 integer DstDisp 
+
+Word: mem=src?
+
+\ false::von Register,  true::zu Register 
+0 integer mem=src? 
+
+Word: far?
+
+0 integer far? 
+
+Word: ArithmOp?
+
+0 integer ArithmOp? 
+
+Word: indirect?
+
+0 integer indirect? 
+
+Word: dest?
+
+\ true wenn Destination vorhanden 
+0 integer dest? 
+
+Word: src?
+
+\ true wenn Source vorhanden 
+0 integer src? 
+
+Word: immData?
+
+\ Gesetzt von # 
+0 integer immData? 
+
+Word: dst>src
+
+\ Move destination to source 
+: dst>src
+     DstTyp is SrcTyp  DstReg is SrcReg  DstDisp is SrcDisp  ; 
+
+Word: FAR_
+
+\ Assembler Direktiven, kommen in Assembler Vokabular 
+:_ FAR_
+     1 is far?  ; 
+
+Word: BYTE_
+
+:_ BYTE_
+     0 is WSize 0 is DstSize  ; 
+
+Word: WORD_
+
+:_ WORD_
+     1 is WSize 1 is DstSize  ; 
+
+Word: #_
+
+:_ #_
+     1 is SrcTyp  -1 is Src?  1 is ImmData?  ; 
+
+Word: #)_
+
+:_ #)_
+     1 is indirect?  ; 
+
+Word: []_
+
+:_ []_
+     1 is indirect?  ; 
+
+Word: aHere
+
+\ Here in zCode, 16 Bit. 
+: aHere   ( -- adr )
+     zHere drop  ; 
+
+Word: al1
+
+\ Jumplabels. 
+0 integer al1 
+
+Word: al2
+
+0 integer al2 
+
+Word: al3
+
+0 integer al3 
+
+Word: ResetArgs
+
+\ Argumente fÅr Opcodes lîschen. 
+: ResetArgs
+     0 is DstTyp  0 is SrcTyp  0 is DstReg  0 is SrcReg
+     0 is WSize  0 is DstSize  0 is SrcSize
+     0 is DstDisp  0 is SrcDisp
+     0 is mem=src?  0 is far?  0 is ArithmOp?  0 is indirect?
+     0 is dest?  0 is src?  0 is immData?  ; 
+
+Word: ResetAss86
+
+: ResetAss86
+     ResetArgs 
+     0 is al1 0 is al2 0 is al3  ; 
+
+Word: SetAss
+
+( SetAss )
+     make ResetAss ResetAss86 
+
+Group: SrcRegister
+
+Word: SReg_
+
+\ Destination Register (mit Komma) 
+: SReg_
+     opcode>   c, c, c,                 \ w type reg
+     opdoes>   true is src?
+               dup c@ dup $FF =
+               if drop else dup is WSize is SrcSize then
+               1+ dup c@ is SrcTyp  1+ c@ is SrcReg
+               SrcTyp 4 = if is SrcDisp then  ; 
+
+Word: AL_
+
+0 2 0 sreg_ AL_ 
+
+Word: CL_
+
+1 2 0 sreg_ CL_ 
+
+Word: DL_
+
+2 2 0 sreg_ DL_ 
+
+Word: BL_
+
+3 2 0 sreg_ BL_ 
+
+Word: AH_
+
+4 2 0 sreg_ AH_ 
+
+Word: CH_
+
+5 2 0 sreg_ CH_ 
+
+Word: DH_
+
+6 2 0 sreg_ DH_ 
+
+Word: BH_
+
+7 2 0 sreg_ BH_ 
+
+Word: AX_
+
+0 3 1 sreg_ AX_ 
+
+Word: CX_
+
+1 3 1 sreg_ CX_ 
+
+Word: DX_
+
+2 3 1 sreg_ DX_ 
+
+Word: BX_
+
+3 3 1 sreg_ BX_ 
+
+Word: SP_
+
+4 3 1 sreg_ SP_ 
+
+Word: BP_
+
+5 3 1 sreg_ BP_ 
+
+Word: SI_
+
+6 3 1 sreg_ SI_ 
+
+Word: DI_
+
+7 3 1 sreg_ DI_ 
+
+Word: [BX+SI]_
+
+0 4 -1 sreg_ [BX+SI]_ 
+
+Word: [BX+DI]_
+
+1 4 -1 sreg_ [BX+DI]_ 
+
+Word: [BP+SI]_
+
+2 4 -1 sreg_ [BP+SI]_ 
+
+Word: [BP+DI]_
+
+3 4 -1 sreg_ [BP+DI]_ 
+
+Word: [SI]_
+
+4 4 -1 sreg_ [SI]_ 
+
+Word: [DI]_
+
+5 4 -1 sreg_ [DI]_ 
+
+Word: [BP]_
+
+6 4 -1 sreg_ [BP]_ 
+
+Word: [BX]_
+
+7 4 -1 sreg_ [BX]_ 
+
+Word: ES_
+
+0 5 -1 sreg_ ES_ 
+
+Word: CS_
+
+1 5 -1 sreg_ CS_ 
+
+Word: SS_
+
+2 5 -1 sreg_ SS_ 
+
+Word: DS_
+
+3 5 -1 sreg_ DS_ 
+
+Word: EAX_
+
+0 3 3 sreg_ EAX_ 
+
+Word: ECX_
+
+1 3 3 sreg_ ECX_ 
+
+Word: EDX_
+
+2 3 3 sreg_ EDX_ 
+
+Word: EBX_
+
+3 3 3 sreg_ EBX_ 
+
+Group: DstRegister
+
+Word: DReg_
+
+\ Destination Register (mit Komma) 
+: DReg_
+     opcode>   c, c, c,                 \ w type reg
+     opdoes>   true is dest?
+               dup c@ dup $FF =
+               if drop else dup is WSize is DstSize then
+               1+ dup c@ is DstTyp  1+ c@ is DstReg
+               DstTyp 4 = if is DstDisp then  ; 
+
+Word: AL,_
+
+0 2 0 dreg_ AL,_ 
+
+Word: CL,_
+
+1 2 0 dreg_ CL,_ 
+
+Word: DL,_
+
+2 2 0 dreg_ DL,_ 
+
+Word: BL,_
+
+3 2 0 dreg_ BL,_ 
+
+Word: AH,_
+
+4 2 0 dreg_ AH,_ 
+
+Word: CH,_
+
+5 2 0 dreg_ CH,_ 
+
+Word: DH,_
+
+6 2 0 dreg_ DH,_ 
+
+Word: BH,_
+
+7 2 0 dreg_ BH,_ 
+
+Word: AX,_
+
+0 3 1 dreg_ AX,_ 
+
+Word: CX,_
+
+1 3 1 dreg_ CX,_ 
+
+Word: DX,_
+
+2 3 1 dreg_ DX,_ 
+
+Word: BX,_
+
+3 3 1 dreg_ BX,_ 
+
+Word: SP,_
+
+4 3 1 dreg_ SP,_ 
+
+Word: BP,_
+
+5 3 1 dreg_ BP,_ 
+
+Word: SI,_
+
+6 3 1 dreg_ SI,_ 
+
+Word: DI,_
+
+7 3 1 dreg_ DI,_ 
+
+Word: [BX+SI],_
+
+0 4 -1 dreg_ [BX+SI],_ 
+
+Word: [BX+DI],_
+
+1 4 -1 dreg_ [BX+DI],_ 
+
+Word: [BP+SI],_
+
+2 4 -1 dreg_ [BP+SI],_ 
+
+Word: [BP+DI],_
+
+3 4 -1 dreg_ [BP+DI],_ 
+
+Word: [SI],_
+
+4 4 -1 dreg_ [SI],_ 
+
+Word: [DI],_
+
+5 4 -1 dreg_ [DI],_ 
+
+Word: [BP],_
+
+6 4 -1 dreg_ [BP],_ 
+
+Word: [BX],_
+
+7 4 -1 dreg_ [BX],_ 
+
+Word: ES,_
+
+0 5 -1 dreg_ ES,_ 
+
+Word: CS,_
+
+1 5 -1 dreg_ CS,_ 
+
+Word: SS,_
+
+2 5 -1 dreg_ SS,_ 
+
+Word: DS,_
+
+3 5 -1 dreg_ DS,_ 
+
+Word: EAX,_
+
+0 3 3 dreg_ EAX,_ 
+
+Word: ECX,_
+
+1 3 3 dreg_ ECX,_ 
+
+Word: EDX,_
+
+2 3 3 dreg_ EDX,_ 
+
+Word: EBX,_
+
+3 3 3 dreg_ EBX,_ 
+
+Group: Modi
+
+Word: +W
+
+: +W   ( n1 -- n2 )
+     WSize 1 and +  ; 
+
+Word: mod1
+
+\ mod=01 setzen 
+: mod1
+     $3F and $40 or  ; 
+
+Word: mod2
+
+\ mod=10 
+: mod2
+     $3F and $80 or  ; 
+
+Word: mod3
+
+\ mod=11 
+: mod3
+     $3F and $C0 or  ; 
+
+Word: cxs,
+
+\ Bildet mod-reg-r/m Byte 
+: cxs,   ( adr -- )
+     c@ mod3 SrcReg + c,z  ; 
+
+Word: disp16
+
+\ Direct addressing 
+: disp16  ( n1 -- n2 )
+     6 or  ; 
+
+Word: Direct
+
+0 constant Direct 
+
+Word: Immed
+
+1 constant Immed 
+
+Word: Reg8
+
+2 constant Reg8 
+
+Word: Reg16
+
+3 constant Reg16 
+
+Word: Indexed
+
+4 constant Indexed 
+
+Word: SegReg
+
+5 constant SegReg 
+
+Word: Reg?
+
+: Reg?   ( b -- f )
+     reg8 over = swap reg16 = or  ; 
+
+Word: Dst=AX,AL?
+
+\ Ist Destination gleich Register AX oder AL? 
+: Dst=AX,AL?   ( -- f )
+     DstTyp reg?  DstReg 0= and  ; 
+
+Word: Src=AX,AL?
+
+\ Ist Source gleich Register AX oder AL? 
+: Src=AX,AL?   ( -- f )
+     SrcTyp reg?  SrcReg 0= and  ; 
+
+Word: DSet
+
+\ Init. Direction Pointer 
+: DSet
+     SrcTyp dup Indexed = swap Direct = or negate is mem=src?  ; 
+
+Word: 7Bit?
+
+: 7Bit?   ( n -- f )
+     $80 + $100 u<  ; 
+
+Word: Distance8,
+
+: Distance8,   ( adr -- )
+     aHere 1+ - dup c,z 
+     7Bit? 0= if  " Address is out of range " AssMsg then  ; 
+
+Word: Distance16,
+
+: Distance16,   ( adr -- )
+     aHere 2+ - ,z  ; 
+
+Word: doIndexed
+
+: doIndexed
+     SrcDisp 0= SrcReg 6 <> and         \ nicht BP 
+     if   SrcReg + c,z
+     else SrcDisp 7Bit?
+          if   mod1 SrcReg + c,z SrcDisp c,z
+          else mod2 SrcReg + c,z SrcDisp ,z
+          then
+     then  ; 
+
+Word: m/rs,
+
+: m/rs,   ( b -- )
+     $38 and                            \ -> mod=00, r/m=000
+     SrcTyp case
+     Direct    of disp16 c,z ,z endof   \ disp16=mod0&[BP]
+     Reg8      of mod3 SrcReg + c,z endof
+     Reg16     of mod3 SrcReg + c,z endof
+     Indexed   of doIndexed endof
+     drop AssError endcase  ; 
+
+Word: m/rd,
+
+: m/rd,   ( ? -- )
+     dst>src m/rs,  ; 
+
+Word: 8/16,
+
+: 8/16,   ( n -- )
+     WSize if ,z else c,z then  ; 
+
+Word: 32?
+
+: 32?   ( -- f )
+     WSize 3 =  ; 
+
+Word: ?32,
+
+: ?32,
+     32? if $66 c,z then  ; 
+
+Group: SingleByte
+
+Word: doOp1
+
+: doOp1   ( adr -- )
+     c@ c,z ResetArgs  ; 
+
+Word: Op1_
+
+: Op1_
+     opcode> c, opdoes> ['] doOp1 a;!  a;  ; 
+
+Word: AAA_
+
+$37 op1_ AAA_ 
+
+Word: AAS_
+
+$3F op1_ AAS_ 
+
+Word: CBW_
+
+$98 op1_ CBW_ 
+
+Word: CLC_
+
+$F8 op1_ CLC_ 
+
+Word: CLI_
+
+$FA op1_ CLI_ 
+
+Word: CLD_
+
+$FC op1_ CLD_ 
+
+Word: CMC_
+
+$F5 op1_ CMC_ 
+
+Word: CMPSB_
+
+$A6 op1_ CMPSB_ 
+
+Word: CMPSW_
+
+$A7 op1_ CMPSW_ 
+
+Word: CWD_
+
+$99 op1_ CWD_ 
+
+Word: DAA_
+
+$27 op1_ DAA_ 
+
+Word: DAS_
+
+$2F op1_ DAS_ 
+
+Word: HLT_
+
+$F4 op1_ HLT_ 
+
+Word: INT0_
+
+$CE op1_ INT0_ 
+
+Word: IRET_
+
+$CF op1_ IRET_ 
+
+Word: LAHF_
+
+$9F op1_ LAHF_ 
+
+Word: LOCK_
+
+$F0 op1_ LOCK_ 
+
+Word: LODSB_
+
+$AC op1_ LODSB_ 
+
+Word: LODSW_
+
+$AD op1_ LODSW_ 
+
+Word: MOVSB_
+
+$A4 op1_ MOVSB_ 
+
+Word: MOVSW_
+
+$A5 op1_ MOVSW_ 
+
+Word: MOVS_
+
+$A5 op1_ MOVS_ 
+
+Word: POPF_
+
+$9D op1_ POPF_ 
+
+Word: PUSHF_
+
+$9C op1_ PUSHF_ 
+
+Word: REP_
+
+$F3 op1_ REP_ 
+
+Word: REPE_
+
+$F3 op1_ REPE_ 
+
+Word: REPNZ_
+
+$F2 op1_ REPNZ_ 
+
+Word: REPZ_
+
+$F3 op1_ REPZ_ 
+
+Word: NOP_
+
+$90 op1_ NOP_ 
+
+Word: SAHF_
+
+$9E op1_ SAHF_ 
+
+Word: SCASB_
+
+$AE op1_ SCASB_ 
+
+Word: SCASW_
+
+$AF op1_ SCASW_ 
+
+Word: STC_
+
+$F9 op1_ STC_ 
+
+Word: STD_
+
+$FD op1_ STD_ 
+
+Word: STI_
+
+$FB op1_ STI_ 
+
+Word: STOSB_
+
+$AA op1_ STOSB_ 
+
+Word: STOSW_
+
+$AB op1_ STOSW_ 
+
+Word: WAIT_
+
+$9B op1_ WAIT_ 
+
+Word: LAT_
+
+$D7 op1_ LAT_ 
+
+Word: doOp1w
+
+: doOp1w   ( adr -- )
+     c@ +w c,z ResetArgs  ; 
+
+Word: Op1w_
+
+: Op1w_
+     opcode> c, opdoes> ['] doOp1w a;! a;  ; 
+
+Word: LODS_
+
+$AC op1w_ LODS_ 
+
+Word: STOS_
+
+$AA op1w_ STOS_ 
+
+Group: Cond.Jumps
+
+Word: doOp2
+
+\ Nur innerhalb Wort springen, damit es relozierbar bleibt. 
+: doOp2   ( adr -- )
+     c@ c,z Distance8, ResetArgs  ; 
+
+Word: Op2_
+
+: Op2_
+     opcode> c, opdoes>  ['] doOp2 a;! a;  ; 
+
+Word: JO_
+
+$70 op2_ JO_ 
+
+Word: JNO_
+
+$71 op2_ JNO_ 
+
+Word: JB_
+
+$72 op2_ JB_ 
+
+Word: JC_
+
+$72 op2_ JC_ 
+
+Word: JNAE_
+
+$72 op2_ JNAE_ 
+
+Word: JAE_
+
+$73 op2_ JAE_ 
+
+Word: JNB_
+
+$73 op2_ JNB_ 
+
+Word: JNC_
+
+$73 op2_ JNC_ 
+
+Word: JE_
+
+$74 op2_ JE_ 
+
+Word: JZ_
+
+$74 op2_ JZ_ 
+
+Word: JNE_
+
+$75 op2_ JNE_ 
+
+Word: JNZ_
+
+$75 op2_ JNZ_ 
+
+Word: JBE_
+
+$76 op2_ JBE_ 
+
+Word: JNA_
+
+$76 op2_ JNA_ 
+
+Word: JA_
+
+$77 op2_ JA_ 
+
+Word: JNBE_
+
+$77 op2_ JNBE_ 
+
+Word: JS_
+
+$78 op2_ JS_ 
+
+Word: JNS_
+
+$79 op2_ JNS_ 
+
+Word: JP_
+
+$7A op2_ JP_ 
+
+Word: JPE_
+
+$7A op2_ JPE_ 
+
+Word: JNP_
+
+$7B op2_ JNP_ 
+
+Word: JPO_
+
+$7B op2_ JPO_ 
+
+Word: JL_
+
+$7C op2_ JL_ 
+
+Word: JNGE_
+
+$7C op2_ JNGE_ 
+
+Word: JGE_
+
+$7D op2_ JGE_ 
+
+Word: JNL_
+
+$7D op2_ JNL_ 
+
+Word: JLE_
+
+$7E op2_ JLE_ 
+
+Word: JNG_
+
+$7E op2_ JNG_ 
+
+Word: JG_
+
+$7F op2_ JG_ 
+
+Word: JNLE_
+
+$7F op2_ JNLE_ 
+
+Word: LOOPNE_
+
+$E0 op2_ LOOPNE_ 
+
+Word: LOOPNZ_
+
+$E0 op2_ LOOPNZ_ 
+
+Word: LOOPE_
+
+$E1 op2_ LOOPE_ 
+
+Word: LOOPZ_
+
+$E1 op2_ LOOPZ_ 
+
+Word: LOOP_
+
+$E2 op2_ LOOP_ 
+
+Word: JCXZ_
+
+$E3 op2_ JCXZ_ 
+
+Group: Segment
+
+Word: Op3_
+
+: Op3_
+     opcode> c,  opdoes>  c@ c,z  ; 
+
+Word: ES:_
+
+$26 op3_ ES:_ 
+
+Word: CS:_
+
+$2E op3_ CS:_ 
+
+Word: SS:_
+
+$36 op3_ SS:_ 
+
+Word: DS:_
+
+$3E op3_ DS:_ 
+
+Group: Push,Pop
+
+Word: doOp4
+
+\ Push und Pop Instruktionen 
+: doOp4   ( adr -- )
+     SrcTyp case
+     SegReg of c@ SrcReg 8 * + dup $0F =    
+               if " Sorry, POP CS not possible" AssMsg then  c,z endof
+     Reg16  of ?32, 1+ c@ SrcReg + c,z endof
+     Reg8   of AssError endof
+     drop 2+ c@ dup c,z $30 and m/rs,    \ Memory
+     endcase ResetArgs  ; 
+
+Word: Op4_
+
+: Op4_
+     opcode> c, c, c,  
+     opdoes> ['] doOp4 a;! a;  ; 
+
+Word: POP_
+
+$8F $58 $07 op4_ POP_ 
+
+Word: PUSH_
+
+$FF $50 $06 op4_ PUSH_ 
+
+Group: Jmp,Call
+
+Word: doOp5
+
+\ jmp adr  legt distance zu adr ab, springt zu adr.
+\ jmp adr [] legt adr ab (disp16), springt zu Inhalt von adr.
+\ ! Offset8-Variante in Holon nicht realisieren, da nicht verschiebbar. 
+: doOp5   ( adr -- )
+     SrcTyp case
+     Direct of indirect?
+               if   $FF c,z c@ far? if 8 + then m/rs,
+               else far?
+                    if   2+ c@ c,z ,z ,z
+                    else 1+ c@ c,z Distance16,
+                    then
+               then endof
+     Reg16  of $FF c,z  cxs, endof
+     Indexed of $FF c,z c@ far? if 8 or then m/rs, endof
+     drop AssError endcase ResetArgs  ; 
+
+Word: Op5_
+
+: Op5_
+     opcode> c, c, c,
+     opdoes> ['] doOp5 a;! a;  ; 
+
+Word: CALL_
+
+$9A $E8 $10 op5_ CALL_ 
+
+Word: JMP_
+
+$EA $E9 $20 op5_ JMP_ 
+
+Group: In,Out
+
+Word: In/OutSize
+
+: In/OutSize   ( opcode -- n )
+     2 and  
+     if   \ OUT
+          Src=AX,AL? 0= 
+          if " Sorry, only AX or AL as source" AssMsg then
+          SrcSize
+     else \ IN
+          Dst=AX,AL? 0= 
+          if " Sorry, only AX or AL as destination" AssMsg then
+          DstSize
+     then  ; 
+
+Word: doOp6
+
+: doOp6   ( adr -- )
+     dup c@ In/OutSize swap 
+     adepth 2 >                         \ direct? :: immdata accepted
+     if   c@ + c,z dup 255 > 
+          if " Sorry, portaddress > 255" AssMsg then
+          c,z                           \ tos=immdata, muss byte sein
+     else SrcReg 2 = DstReg 2 = or 0=
+          if " Sorry, portaddress only in DX" AssMsg then
+          1+ c@ + c,z
+     then ResetArgs  ; 
+
+Word: Op6_
+
+: Op6_
+     opcode> c, c,
+     opdoes> ['] doOp6 a;! a;  ; 
+
+Word: IN_
+
+\ Syntax: in al, dx   in al, 77    in al, # 77 
+$EC $E4 op6_ IN_ 
+
+Word: OUT_
+
+$EE $E6 op6_ OUT_ 
+
+Group: Add,Sub,Logik
+
+Word: ArithImmediate
+
+\ (*) (Fall: weder Logik noch Byte): imm. Wert als Byte gespeichert,
+\ aber zu 16bit erweitert in Operation (Expansionsbit s) 
+: ArithImmediate   ( adr -- )
+     Dst=AX,AL?
+     if   ?32, 2+ c@ +w c,z  DstTyp Reg8 = 
+          if c,z else ,z 32? if ,z then then
+     else dup 1+ c@ $FE and +w rot >r
+          ArithmOp? WSize and           \ weder Logik noch ByteReg.
+          if   r@ 7bit?
+               if   2 or ( s=1 ) c,z c@ m/rd, r@ c,z   \ (*)
+               else c,z c@ m/rd, r@ ,z
+               then
+          else c,z c@ m/rd, r@ 8/16,
+          then r>drop
+     then  ; 
+
+Word: ArithMemory
+
+\ Source ist Speicherregister 
+: ArithMemory   ( opcode -- )
+     $84 over - ( kein TEST ) if 2 or ( D=1) then +w c,z
+     DstTyp Reg? 0=
+     if " Sorry, source or destination must be a register" AssMsg
+     then
+     DstReg 8 * m/rs,  ; 
+
+Word: doOp7
+
+: doOp7   ( adr -- )
+     dup 1+ c@ 1 and is ArithmOp?
+     SrcTyp Immed =
+     if   ArithImmediate                \ Source ist immdata
+     else c@ SrcTyp Reg?
+          if   +w c,z SrcReg 8 * m/rd,  \ Source ist Register
+          else ArithMemory              \ Source ist Speicher
+          then
+     then ResetArgs  ; 
+
+Word: Op7_
+
+: Op7_
+     opcode> c, c, c,
+     opdoes> ['] doOp7 a;! a;  ; 
+
+Word: ADC_
+
+$14 $81 $10 op7_ ADC_ 
+
+Word: ADD_
+
+$04 $81 $00 op7_ ADD_ 
+
+Word: AND_
+
+$24 $80 $20 op7_ AND_ 
+
+Word: CMP_
+
+$3C $81 $38 op7_ CMP_ 
+
+Word: OR_
+
+$0C $80 $08 op7_ OR_ 
+
+Word: SBB_
+
+$1C $81 $18 op7_ SBB_ 
+
+Word: SUB_
+
+$2C $81 $28 op7_ SUB_ 
+
+Word: TEST_
+
+$A8 $F6 $84 op7_ TEST_ 
+
+Word: XOR_
+
+$34 $80 $30 op7_ XOR_ 
+
+Group: Mul,Div
+
+Word: doOp8
+
+: doOp8   ( adr -- )
+     dup 1+ c@ +w c,z c@ m/rs, ResetArgs  ; 
+
+Word: Op8_
+
+: Op8_
+     opcode> c, c,
+     opdoes> ['] doop8 a;! a;  ; 
+
+Word: DIV_
+
+$F6 $30 op8_ DIV_ 
+
+Word: IDIV_
+
+$F6 $38 op8_ IDIV_ 
+
+Word: IMUL_
+
+$F6 $28 op8_ IMUL_ 
+
+Word: MUL_
+
+$F6 $20 op8_ MUL_ 
+
+Word: NEG_
+
+$F6 $18 op8_ NEG_ 
+
+Word: NOT_
+
+$F6 $10 op8_ NOT_ 
+
+Group: Shifting
+
+Word: doOp9
+
+: doOp9   ( adr -- )
+     dup 1+ c@ DstSize + DstTyp Reg?
+     if   SrcTyp 1 =                    \ Source immediate?
+          if   rot 1 <> 
+               if " Only shift by 1 allowed" AssMsg then
+               c,z
+          else SrcTyp Reg8 = SrcReg 1 = and 0=
+               if " Only CL possible for shiftsize" AssMsg then
+               2+ c,z
+          then c@ m/rd,
+     else Dest? 0= SrcTyp Reg? and 0= 
+          if " Wrong operands" AssMsg then
+          +w c,z c@ m/rs,
+     then ResetArgs  ; 
+
+Word: Op9_
+
+: Op9_
+     opcode> c, c,
+     opdoes> ['] doOp9 a;! a;  ; 
+
+Word: RCL_
+
+$D0 $10 op9_ RCL_ 
+
+Word: RCR_
+
+$D0 $18 op9_ RCR_ 
+
+Word: ROL_
+
+$D0 $00 op9_ ROL_ 
+
+Word: ROR_
+
+$D0 $08 op9_ ROR_ 
+
+Word: SAL_
+
+$D0 $20 op9_ SAL_ 
+
+Word: SAR_
+
+$D0 $38 op9_ SAR_ 
+
+Word: SHL_
+
+$D0 $20 op9_ SHL_ 
+
+Word: SHR_
+
+$D0 $28 op9_ SHR_ 
+
+Group: AAM,AAD,DEC,INC
+
+Word: doOp10
+
+: doOp10   ( adr -- )
+     dup 1+ c@ c,z c@ c,z ResetArgs  ; 
+
+Word: Op10_
+
+: Op10_
+     opcode> c, c,
+     opdoes> ['] doOp10 a;! a;  ; 
+
+Word: AAM_
+
+$DA $0A op10_ AAM_ 
+
+Word: AAD_
+
+$D5 $0A op10_ AAD_ 
+
+Word: doOp11
+
+: doOp11   ( adr -- )
+     SrcTyp Reg? WSize 0 <> and
+     if c@ SrcReg + c,z else $FE +w c,z 1+ c@ m/rs, then
+     ResetArgs  ; 
+
+Word: Op11_
+
+: Op11_
+     opcode> c, c, 
+     opdoes> ['] doOp11 a;! a;  ; 
+
+Word: DEC_
+
+$08 $48 op11_ DEC_ 
+
+Word: INC_
+
+$00 $40 op11_ INC_ 
+
+Group: Moving
+
+Word: doMOV/2
+
+: doMOV/2
+     SrcTyp 0= DstTyp 0= or       
+     Dst=AX,AL? Src=AX,AL? or and       \ mov ax,dir   mov dir,ax
+     if   $A0 +w SrcTyp if 2+ then c,z ,z
+     else SrcTyp Immed =                \ mov mem,#imm
+          if   $C6 +w c,z >r 0 m/rd, r> 8/16,
+          else DstTyp Reg?              \ mov reg,reg/mem
+               if   $88 +w 2+ c,z DstReg 8 * m/rs,
+               else SrcTyp Reg?         \ mov mem,reg
+                    if   $88 +w c,z SrcReg 8 * m/rd,
+                    else AssError
+     then then then then  ; 
+
+Word: ?SegError
+
+\ Fehler, wenn reg ein Segmentregister 
+: ?SegError   ( reg -- )
+     SegReg = if " Seg to seg not possible" AssMsg then  ; 
+
+Word: doMOV
+
+: doMOV
+     drop DstTyp SegReg =               \ mov seg,reg   mov seg,mem
+     if   SrcTyp ?SegError $8E c,z DstReg 8 * m/rs,
+     else SrcTyp SegReg =               \ mov reg,seg   mov mem,seg
+          if   DstTyp ?SegError $8C c,z SrcReg 8 * m/rd,
+          else SrcTyp Immed = DstTyp Reg? and     \ mov reg,#imm
+               if   $16 +w 8 * DstReg + c,z 8/16,
+               else doMOV/2
+               then
+          then
+     then ResetArgs  ; 
+
+Word: MOV_
+
+:_ MOV_
+     0 ['] doMOV a;! a;  ; 
+
+Word: doXCHG
+
+: doXCHG
+     drop SrcTyp Reg? DstTyp Reg? and   \ src and dst are registers
+     SrcReg 0= DstReg 0= or and         \ src or dst is AX
+     WSize 1 = and                      \ not AL
+     if   SrcReg if SrcReg else DstReg then 
+          $90 + c,z                    \ xchg ax,ax = nop 
+     else $86 +w c,z  SrcTyp Reg? 0= DstTyp Reg? 0= and
+          if   AssError
+          else SrcTyp Reg? 
+               if SrcReg 8 * m/rd, else dstReg 8 * m/rs, then
+          then 
+     then ResetArgs  ; 
+
+Word: XCHG_
+
+:_ XCHG_
+     0 ['] doXCHG a;! a;  ; 
+
+Group: Rest
+
+Word: doOp12
+
+: doOp12   ( adr -- )
+     c@ c,z DstTyp Reg16 = 
+     if   DstReg 8 * m/rs, 
+     else AssError
+     then ResetArgs  ; 
+
+Word: Op12_
+
+: Op12_
+     opcode> c,
+     opdoes> ['] doOp12 a;! a;  ; 
+
+Word: LDS_
+
+$C5 op12_ LDS_ 
+
+Word: LEA_
+
+$8D op12_ LEA_ 
+
+Word: LES_
+
+$C4 op12_ LES_ 
+
+Word: doINT
+
+: doINT   ( adr -- )
+     drop dup 3 = 
+     if   drop $CC c,z 
+     else $CD c,z c,z  
+     then ResetArgs  ; 
+
+Word: INT_
+
+:_ INT_
+     0 ['] doINT a;! a;  ; 
+
+Word: doRET
+
+\ RET near (default) and far 
+: doRET   ( adr -- )
+     drop far? if $CA else $C2 then 
+     ImmData? 
+     if   c,z ,z 
+     else 1+ c,z 
+     then ResetArgs  ; 
+
+Word: RET_
+
+:_ RET_
+     0 ['] doRET a;! a;  ; 
+
+Word: doESC
+
+\ ESC zu Coprozessor mit Opcode 
+: doESC   ( src opcode adr -- )
+     drop dup 7 and $D8 or c,z m/rs, ResetArgs  ; 
+
+Word: ESC_
+
+:_ ESC_
+     0 ['] doESC a;! a;  ; 
+
+Group: Strukturen
+
+Word: !dist
+
+\ Ersetzt adr durch Sprungdistanz von aHere zu adr 
+: !dist   ( adr -- )
+     aHere over 1+ - swap 0 c!z  ; 
+
+Word: L1_
+
+\ adr ablegen, zHere als fake, wird ersetzt 
+:_ L1_
+     al1 if al1 else aHere 1+ dup is al1 then  ; 
+
+Word: L2_
+
+:_ L2_
+     al2 if al2 else aHere 1+ dup is al2 then  ; 
+
+Word: L3_
+
+:_ L3_
+     al3 if al3 else aHere 1+ dup is al3 then  ; 
+
+Word: L1:_
+
+\ zHere speichern (RÅckreferenz) oder Sprung auflîsen (VorwÑrtsref.) 
+:_ L1:_
+     a; al1 ?dup if !dist else aHere is al1 then  ; 
+
+Word: L2:_
+
+:_ L2:_
+     a; al2 ?dup if !dist else aHere is al2 then  ; 
+
+Word: L3:_
+
+:_ L3:_
+     a; al3 ?dup if !dist else aHere is al3 then  ; 
+
+Word: ?Condition
+
+: ?Condition   ( n1 n2 -- )
+     <> if " Sorry, wrong structure" NameMeldung then  ; 
+
+Word: >mark
+
+\ ZusÑtzlicher Strukturtest mit #ass. 4.132 
+: >mark   ( -- n adr )
+     aHere 0 c,z 2 +asp_ 2 add #ass  ;   \ 4.132 
+
+Word: <mark
+
+: <mark   ( -- n adr )
+     aHere 2 +asp_ 2 add #ass  ; 
+
+Word: >resolve
+
+: >resolve   ( n1 adr n2 -- )
+     rot ?Condition !dist -2 +asp_ -2 add #ass  ; 
+
+Word: <resolve
+
+: <resolve   ( n1 adr n2 -- )
+     rot ?Condition aHere 1+ - c,z  -2 +asp_ -2 add #ass  ; 
+
+Word: 0=_
+
+$75 constant_ 0=_                       \ JNE JNZ 
+
+Word: =_
+
+$75 constant_ =_                        \ JNE JNZ 
+
+Word: 0<>_
+
+$74 constant_ 0<>_                      \ JE JZ 
+
+Word: <>_
+
+$74 constant_ <>_                       \ JE JZ 
+
+Word: 0<_
+
+$79 constant_ 0<_                       \ JNS 
+
+Word: 0>=_
+
+$78 constant_ 0>=_                      \ JS 
+
+Word: <_
+
+$7D constant_ <_                        \ JGE JNL 
+
+Word: >=_
+
+$7C constant_ >=_                       \ JNGE JL 
+
+Word: <=_
+
+$7F constant_ <=_                       \ JG JNLE 
+
+Word: >_
+
+$7E constant_ >_                        \ JNG JLE 
+
+Word: U<_
+
+$73 constant_ U<_                       \ JAE JNB JNC 
+
+Word: U>=_
+
+$72 constant_ U>=_                      \ JNAE JB JC 
+
+Word: U<=_
+
+$77 constant_ U<=_                      \ JA JNBE 
+
+Word: U>_
+
+$76 constant_ U>_                       \ JNA JBE 
+
+Word: OV<>_
+
+$70 constant_ OV<>_                     \ JO 
+
+Word: OV_
+
+$71 constant_ OV_                       \ JNO 
+
+Word: PE_
+
+$7B constant_ PE_                       \ JNP JPO 
+
+Word: PO_
+
+$7A constant_ PO_                       \ JP JPE 
+
+Word: CX<>0_
+
+$E3 constant_ CX<>0_                    \ JCXZ 
+
+Word: IF_
+
+:_ IF_   ( b -- 2 adr )
+     >r a; r> c,z 2 >mark a;  ; 
+
+Word: THEN_
+
+:_ THEN_   ( n adr -- )
+     a; 2 >resolve  ; 
+
+Word: ELSE_
+
+:_ ELSE_   ( n adr -- 2 adr )
+     $EB IF_ 2swap THEN_  ; 
+
+Word: BEGIN_
+
+:_ BEGIN_   ( -- 3 adr )
+     a; 3 <mark  ; 
+
+Word: UNTIL_
+
+:_ UNTIL_   ( n adr b -- )
+     >r a; r> c,z 3 <resolve a;  ; 
+
+Word: AGAIN_
+
+:_ AGAIN_   ( n adr -- )
+     $EB UNTIL_  ; 
+
+Word: WHILE_
+
+:_ WHILE_   ( n1 adr1 -- n2 adr2 n1 adr1 )
+     IF_ 2swap  ; 
+
+Word: REPEAT_
+
+:_ REPEAT_   ( n2 adr2 n1 adr1 -- )
+     AGAIN_ THEN_  ; 
+
+Group: Metaworte
+
+Word: JSR
+
+\ FÅr Meta-Call und -Jump Worte 
+$E8 constant JSR 
+
+Word: JMP
+
+$E9 constant JMP 
+
+Word: Offset,
+
+: Offset,   ( tadr -- )
+     drop aHere 2 + - ,z  ; 
+
+Word: Jump,86
+
+\ 4.116 
+: Jump,86
+     JMP c,z  Offset,  ; 
+
+Word: Call,86
+
+\ 4.116 
+: Call,86
+     JSR c,z  Offset,  ; 
+
+Word: jmp?86
+
+\ Ist opcode bei tadr ein "jmp ext adr" ? 
+: jmp?86   ( tadr -- f )
+     @zf $FF and JMP =  ; 
+
+Word: jsr?86
+
+\ Ist opcode bei tadr = 'jsr ext adr' oder 'call adr' ? 
+: jsr?86  ( tadr -- f )
+     @zf $FF and JSR =  ; 
+
+Word: Break86
+
+\ Break durch INT3 
+$CC constant Break86 
+
+Word: >Break86
+
+\ Das erste Byte im Codewort x1 ersetzen durch das Breakbyte. 
+: >Break86   ( x1 -- x2 )
+     drop $FF00 and Break86 or 0  ; 
+
+Word: SetAss86
+
+\ 4.116 
+( SetAss86 )
+     make Jump, Jump,86
+     make Call, Call,86
+     make doJmp JMP_
+     make Jmp? Jmp?86
+     make Jsr? Jsr?86
+     make >Break >Break86 
+
+Group: CPU-Register
+
+Word: cpuAX
+
+\ Aktuelle Register im Target nach Halt und Break 
+0 2 cpuReg cpuAX 
+
+Word: cpuBX
+
+2 2 cpuReg cpuBX 
+
+Word: cpuCX
+
+4 2 cpuReg cpuCX 
+
+Word: cpuDX
+
+6 2 cpuReg cpuDX 
+
+Word: cpuSI
+
+8 2 cpuReg cpuSI 
+
+Word: cpuDI
+
+10 2 cpuReg cpuDI 
+
+Word: cpuBP
+
+12 2 cpuReg cpuBP 
+
+Word: cpuDS
+
+14 2 cpuReg cpuDS 
+
+Word: cpuSS
+
+16 2 cpuReg cpuSS 
+
+Word: cpuES
+
+18 2 cpuReg cpuES 
+
+Word: cpuPC
+
+20 2 cpuReg cpuPC 
+
+Word: cpuCS
+
+22 2 cpuReg cpuCS 
+
+Word: cpuCF
+
+24 2 cpuReg cpuCF 
+
+Word: cpuLen86
+
+26 constant cpuLen86 
+
+Word: GetCpuRegs
+
+: GetCpuRegs
+     cpuES is tES  
+     cpuSI 2- 0 is tIP  
+     cpuPC 1- 0 is tPC  ; 
+
+Word: SetCpuLen
+
+( SetCpuLen )
+     make cpuLen cpuLen86 
+

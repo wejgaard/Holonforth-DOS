@@ -1,0 +1,341 @@
+Module: Utilities
+
+Group: Exceptions
+
+HolonForth provides a powerful and very readable exception mechanism:
+.. TRY WORD ... If an exception occurs somewhere inside WORD, the
+execution is ended with ENDTRY, and the program continues immediately
+behind WORD. You can nest TRY inside other TRYs. Then ENDTRY returns to
+the last TRYed word.
+The mechanism is equivalent to the CATCH and THROW proposal of ANS
+Forth, only better readable and simpler to use. 
+
+Word: TryHere
+
+\ Stores the data and return stack pointers SP and BP. BP points to the
+\ SP,BP pair of the calling Try (there is always a calling Try). The
+\ return-IP (ES:SI) of the present Try is available at BP-4. 
+Label TryHere
+     sp@ , rp@ , 
+
+Word: TryError?
+
+\ True, if a try-ed function has been finished by EndTry, i.e an
+\ exception has occurred. 
+Flag TryError? 
+
+Word: doTry
+
+\ Saves the state of the calling Try, stores the present state (SP and
+\ RP), and clears the flag TryError?. 
+Code doTry
+     mov adr TryError? # 0 word   sub bp, # 4         
+     mov ax, TryHere   mov 2 [bp], ax        \ old try-sp
+     mov ax, TryHere 2+  mov 0 [bp], ax      \ old try-bp
+     mov TryHere sp  mov TryHere 2+ bp       \ new try-here
+     next 
+
+Word: deTry
+
+\ Reestablishes the state of the calling Try. 4.050 
+Code deTry
+     mov ax, 2 [bp]   mov TryHere ax         \ old try-sp
+     mov ax, 0 [bp]   mov TryHere 2+ ax      \ old try-bp
+     add bp, # 4         
+     next 
+
+Word: Try
+
+\ The exception handler Try. Syntax: .. TRY WORD .. The execution of WORD
+\ can be interrupted by ENDTRY (somewhere deep inside), and then the
+\ execution continues immediately after WORD. 
+Compiler: Try
+    Intp: NoIntp  ;
+    Comp: Code, ' compile, postpone deTry  ;
+    Code: doTry 
+
+Word: EndTry
+
+\ Stops the execution of a TRY-ed word and resets the stack pointers. 
+Code EndTry
+     mov adr TryError? # -1 word
+     mov sp, TryHere   mov bp, TryHere 2+  sub bp, # 4 
+     jmp ' exit 
+
+Word: ?Escape
+
+\ Performs EndTry if the Esc key has been pressed. 
+: ?Escape
+     key? if key $FF and 27 = if endtry then then  ; 
+
+Word: DebuggingTry
+
+Text: DebuggingTry
+A note on debugging a word that uses TRY. If you single-step the
+sequence "TRY THEWORD", TRY executes THEWORD and steps to the following
+word. The debugger counts "TRY THEWORD" as one step. You cannot step to
+THEWORD and "gosub" into THEWORD. 
+
+However, if you replace the sequence "TRY THEWORD" with "DOTRY THEWORD
+DETRY" (which is actually compiled in the first case), the debugger
+registers three separate steps. Step to THEWORD and press F3=GoSub. In
+this way you can study the behaviour of TRY in detail. 
+
+Group: Vocabularies
+
+Word: Vocabularies
+
+Text: Vocabularies
+   HolonForth uses unique names throughout the program. This enables us
+to access every word directly. Yet some programs do require private
+lists of names that may clash with system names. Holon offers the
+following solution:
+  The special colon definer :_ enters a copy of the wordname in the
+current vocabulary list, but does not include the last character of the
+name. Thus we can define a word AND_ in the browser and will find the
+word AND in the vocabulary list. 
+
+Word: Context
+
+\ Leaves pointer to head of list of context vocabulary. 
+Code Context   ( -- adr )
+     mov ax, tContext  1push 
+
+Word: Vocabulary
+
+\ Vocabulary definer, current = context. 
+: Vocabulary
+     create 0 ,
+     does>  tContext !  ; 
+
+Word: vList
+
+\ Shows all names in the current vocabulary. Use it in testmode. 
+\ Syntax: <vocabulary> VLIST 
+: vList
+     Context 
+     begin     @ dup
+     while     dup 2+ "type 2 spaces
+     repeat  drop  ; 
+
+Word: :_
+
+\ A version of colon that also creates a name entry in the current
+\ vocabulary list. The name is converted to uppercase and does not
+\ include the last character. Example: :_ Mux_ ... ; enters the name MUX
+\ in the current vocabulary list. 
+Compiler: :_
+    Intp: CallCode, ListSeg , ,Header ] 77 ;
+    Comp: NoComp ;
+    Code: doColon 
+
+Word: imm:_
+
+\ Defines a colon word with an entry in the current vocabulary. The entry
+\ is marked as "immediate" in the classical Forth way: bit8 in the count
+\ byte is set. 
+Compiler: imm:_
+    Intp: CallCode, ListSeg , ,Header&Imm  ]  77  ;
+    Comp: NoComp ;
+    Code: doColon 
+
+Word: Constant_
+
+\ Defines a constant with an entry in the current vocabulary. 
+Compiler: Constant_   ( n -- )
+    Intp: JmpCode, , ,Header ;
+    Comp: NoComp ;
+    Code: doCon 
+
+Group: FileParsing
+
+Word: FString
+
+\ Receives parsed text. 
+160 Stringbuf FString 
+
+Word: +FString
+
+\ Adds c to text in FString. 
+: +FString   ( c -- )
+     pad 1+ c!  1 pad c!  pad add FString  ; 
+
+Word: FSkip
+
+\ Moves pointer in file h while byte at pointer is equal to c or until
+\ end of file.  I.e. skips following bytes=c. 
+: FSkip   ( h c -- )
+     begin over c@h 
+           eof? if 3drop exit then
+           over <> if drop -1 MovePointer exit then
+     again ; 
+
+Word: FScan
+
+\ Reads contents of file h from current position until first occurrence
+\ of byte c to FString. Byte c is not included. Leaves file pointing
+\ behind byte c. 
+: FScan   ( h c -- )
+     clear FString
+     begin over c@h
+           eof? if 3drop exit then
+           2dup <>
+           if   +FString
+           else 3drop exit
+           then 
+     again ; 
+
+Word: FwScan
+
+\ Reads contents of file h from current position until first occurrence
+\ of space or a control char to FString. 
+: FwScan   ( h -- )
+     clear FString
+     begin dup c@h
+           eof? if 2drop exit then
+           dup 'bl >
+           if   +FString
+           else 2drop exit
+           then 
+     again ; 
+
+Word: FWord
+
+\ Fetches next word from file h to FString. 
+: FWord   ( h -- )
+     dup 'bl FSkip FwScan  ; 
+
+Group: Messages
+
+Word: TheMessages
+
+Text: TheMessages
+   Every application needs a mechanism for messages to the user. This
+group presents a simple solution which shows the message in a frame in
+the middle of the screen. The screen is saved, the message is presented
+for one second and then the screen is restored. 
+   This is very handy for the general error message which reports the
+cause of some exception and returns with EndTry. 
+
+Word: xySign
+
+\ Defining word for emitting a graphical character c at position x,y at
+\ runtime. 
+: xySign  
+     create c,                  ( c -- )
+     does>  c@ -rot xy  emit  ; ( x y -- ) 
+
+Word: UL
+
+\ Sign for upper left corner. 
+201 xySign UL 
+
+Word: UR
+
+\ Sign for upper right corner. 
+187 xySign UR 
+
+Word: LL
+
+\ Sign for lower left corner. 
+200 xySign LL 
+
+Word: LR
+
+\ Sign for lower right corner. 
+188 xySign LR 
+
+Word: =Line
+
+\ Shows a horizontal double-line on row y from columns x1 to x2. 
+: =Line   ( y x1 x2 -- )
+     over - -rot swap xy 0 ?do 205 emit loop  ; 
+
+Word: ||Line
+
+\ Displays a vertikal double-line at column x from row y1 to y2. 
+: ||Line   ( x y1 y2  -- )
+     over - -rot xy 0 ?do 186 emit 10 emit 8 emit loop  ; 
+
+Word: xa
+
+0 integer xa 
+
+Word: ya
+
+0 integer ya 
+
+Word: xb
+
+0 integer xb 
+
+Word: yb
+
+0 integer yb 
+
+Word: Frame
+
+\ Writes an empty double-lined frame in the middle of the screen. 
+: Frame  ( xa ya xb yb -- )
+     is yb  is xb  is ya  is xa
+     xa 2- ya 1- xb 2+ yb 1+ ClrTxt
+     ya xa xb =Line  yb xa xb =Line
+     xa ya yb ||Line xb ya yb ||Line
+     xa ya UL  xb ya UR  xa yb LL  xb yb LR  ; 
+
+Word: WriteInFrame
+
+\ Displays the frame and the message "adr centered on the middle line. 
+: WriteInFrame   ( "adr -- )
+     bold 
+     20 6 60 16 Frame     
+     dup c@                        \ length of message
+     2/ 40 swap - 11 xy "type         \ write message in center
+     normal  ; 
+
+Word: Message
+
+\ Shows the message "adr for one second. 
+: Message   ( "adr -- )
+     @xy rot SaveScreen WriteinFrame 1sec RestoreScreen xy  ; 
+
+Word: ErrMsg
+
+\ Displays the error message "adr on the screen for 1 second and returns
+\ via ENDTRY (must be called inside a TRY'ed word). 
+: ErrMsg   ( "adr -- )
+     Screen                             \ direct output to screen
+     Message                            \ wait
+     EndTry  ;                          \ return to Try 
+
+Group: ConditionalLoading
+
+Word: ?Loading
+
+Text: ?Loading
+   Holon contains a mechanism for the conditional loading of single
+words. The word ?LOAD: is used in conjunction with a flag variable at
+the start of a definition. The following example demonstrates the
+process. 
+   We use ?LOAD: mainly to include specific text with a program
+version. However, we prefer to control the functions of different
+versions via state variables. Certain functions are disabled for
+certain versions. 
+
+Word: VersionA?
+
+\ True if version A shall be loaded. 
+Flag VersionA? 
+
+Word: WordA
+
+VersionA? ?Load:
+: WordA
+     ." This belongs to version A"  ; 
+
+Word: WordB
+
+VersionA? 0= ?Load:
+: WordB
+     ." This belongs to version B"  ; 
+

@@ -1,0 +1,1262 @@
+Module: DOS&Ext
+
+Group: Video
+
+This is a collection of words for actual output to the video screen.
+All words call routines in the BIOS. If you prefer calls to DOS (slower
+but redirectable) please change the interrupt calls accordingly. 
+
+Word: video
+
+\ Sets video mode u. 
+Code video   ( u -- )
+     pop ax  int $10   next 
+
+Word: Mode:
+
+\ Defining word for video modes. 
+: Mode:   
+     create ,   ( u -- )
+     does>  @ video  ; 
+
+Word: MonoText
+
+2 mode: MonoText 
+
+Word: ColourText
+
+3 Mode: ColourText 
+
+Word: TheMode
+
+\ Reads the current video mode from the BIOS area in RAM. 
+: TheMode   ( -- n )
+     0 $449 c@l  ; 
+
+Word: Attribute
+
+\ Video attribute of characters emitted to the screen. 
+$1F integer Attribute 
+
+Word: AttributeType
+
+\ Defining word for attributes including values for both mono and colour
+\ modes. 
+: AttributeType   ( mono colour -- )
+     create c, c,
+     does>  theMode 2 = if 1+ then c@ is Attribute  ; 
+
+Word: normal
+
+\ Normal attribute, grey on black (mono), white on blue (colour). 
+$07 $1F AttributeType normal 
+
+Word: bold
+
+\ Attribute for emphasized display, white on black (mono), yellow on blue
+\ (colour). 
+$0F $1E AttributeType bold 
+
+Word: inverse
+
+\ Attribute for inverse display, black on grey (mono), yellow on violet
+\ (colour). 
+$70 $5E AttributeType inverse 
+
+Word: biosTypel
+
+\ Emits u characters of text at seg:off to current cursor position and
+\ updates cursor. Uses current value of attribute. 
+Code biosTypel   ( seg off u -- )
+     mov ax, es   mov bx, bp
+     pop cx  pop bp  pop es
+     add adr #out cx                         
+     push bx  push ax  push si  
+     push cx  mov ah, # 3  sub bx, bx  int $10  pop cx
+     mov ax, # $1301   mov bl, adr Attribute  int $10
+     pop si  pop es  pop bp  
+     next 
+
+Word: biosType
+
+\ Emits u characters of text starting at adr. 
+: biosType   ( adr u -- )
+     cs: -rot typel  ; 
+
+Word: vEmit
+
+\ Emits character c to video screen using current attribute. 
+: vEmit   ( c -- )
+     ss: sp@ 2 + 1 biosTypel drop  ; 
+
+Word: xy
+
+\ Positions the cursor at column x and row y. 
+Code xy   ( x y -- )
+     pop ax   mov dh, al  pop ax  mov dl, al   
+     sub bx, bx   mov ah, # 2
+     push si  push bp  int $10  pop bp  pop si
+     next 
+
+Word: at-xy
+
+\ Positions cursor at column x and row y. ANS-Forth. 
+Alias: at-xy  xy 
+
+Word: @xy
+
+\ Fetches the current cursor position (column, row). 
+Code @xy   ( -- x y )
+     sub bx, bx   mov ah, # 3
+     push si  push bp  int $10  pop bp  pop si
+     sub ax, ax  mov al, dl  push ax
+     mov al, dh  1push 
+
+Word: Cursor
+
+\ Sets the cursor size from lower to upper (lines in character block). 
+Code Cursor   ( upper lower -- )
+     pop ax   mov cl, al   pop ax   mov ch, al   mov ah, # 1
+     push si  push bp  int $10  pop bp  pop si
+     next 
+
+Word: CursorOn
+
+\ Makes the cursor visible. 
+: CursorOn
+     8 9 Cursor  ; 
+
+Word: CursorOff
+
+\ Makes the cursor invisible [numbers work for most video modes] 
+: CursorOff
+     17 16 Cursor  ; 
+
+Word: SetVideo
+
+( SetVideo )
+     normal
+     make CurOn CursorOn
+     make CurOff CursorOff 
+
+Word: scrollup
+
+\ Scrolls n lines up in a window defined by the diagonal points x1,y1
+\ (upper-left) to x2,y2 (lower-right). New lines have current attribute. 
+Code scrollup   ( x1 y1 x2 y2 n -- )
+     pop ax
+     pop bx  pop dx  mov dh, bl
+     pop bx  pop cx  mov ch, bl
+     mov bh, adr Attribute
+     mov ah, # 6  int $10
+     next 
+
+Word: scrolldn
+
+\ Scrolls n lines down in the window defined by the diagonal points x1,y1
+\ (upper-left) to x2,y2 (low-right). New lines have current attribute. 
+Code scrolldn   ( x1 y1 x2 y2 n -- )
+     pop ax
+     pop bx  pop dx  mov dh, bl
+     pop bx  pop cx  mov ch, bl
+     mov bh, adr Attribute
+     mov ah, # 7  int $10
+     next 
+
+Word: ClrTxt
+
+\ Clears text in window defined by corners x1,y1 and x2,y2 using the
+\ current attibute value. 
+: ClrTxt   ( x1 y1 x2 y2 -- )
+     0 scrolldn  ; 
+
+Word: page
+
+\ Clears the screen and positions the cursor at the upper left corner. 
+: page
+     0 0 80 24 ClrTxt  0 0 xy  ; 
+
+Group: Keyboard
+
+Word: DosKey?
+
+\ Delivers f=$FF if a key is available, else f=0. Checks Ctl+C and calls
+\ the ctl+C-handler at interrupt $23. 
+Code DosKey?   ( -- f )
+     mov ah, # $0B  int $21   
+     sub ah, ah  1push 
+
+Word: BiosKey?
+
+\ Flag f is non-zero if a key is available. The keycode is not removed
+\ from the keybuffer and can be fetched by KEY. flag = hi|lo = func|0 or
+\ scan|ascii. Does not check Ctl+C. 
+Code BiosKey?   ( -- f )
+     mov ah, # 1  int $16
+     0= if sub ax, ax then
+     1push 
+
+Word: MyKey?
+
+\ The direct way: look up pointers in the key buffer. 
+: MyKey?   ( -- f )  
+     $40 $1A @l  $40 $1C @l <>  ; 
+
+Word: DosKey
+
+\ Waits for a character from keyboard. If c is 0, an extended character
+\ code is waiting, which will be read with the next call of DosKey. Does
+\ not check Ctl+C. 
+Code DosKey   ( -- c )
+     mov ah, # $07  int $21   
+     sub ah, ah  1push 
+
+Word: GetKey
+
+\ Delivers ASCII code or extended character code without leading zero.
+\ 4.114 
+: GetKey   ( -- c )
+     key ?dup drop  ; 
+
+Word: NormalKey
+
+\ Waits for a key and delivers the ascii code for a normal key or a
+\ function code and zero for a special control key. 4.114 
+: NormalKey   ( -- c | fcode 0 )
+     DosKey dup 0= if DosKey swap then  ; 
+
+Word: NormalKeys
+
+\ Sets vectors to key routines without task switching. See TaskKeys. 
+: NormalKeys 
+\     make Key? myKey?                   
+     make Key? BiosKey?                   \ 43h
+     make Key NormalKey   ; 
+
+Word: Screen
+
+\ Directs output to screen. 
+: Screen
+     make emit vEmit   
+     make type  biostype
+     make typel biosTypel  ; 
+
+Word: Console
+
+\ Directs text input and output to the console. 
+: Console
+     Screen  NormalKeys  make cr cr0  ; 
+
+Word: ClrKeyBuf
+
+\ Removes all pending keycodes from the keybuffer. 
+: ClrKeyBuf
+     begin BiosKey? while DosKey drop repeat  ;  \ 4.114 
+
+Group: DOS-Errors
+
+A tricky aspect of calling DOS functions is the handling of errors.
+Holon provides complete error information for every function call. Most
+DOS function words end with a call to ?doserr , which collects all the
+error information DOS provides for. 
+
+Word: Err#
+
+\ DOS error number. 
+0 integer Err# 
+
+Word: ErrClass
+
+\ DOS error class. 
+0 integer ErrClass 
+
+Word: ErrAction
+
+\ DOS error suggested action. 
+0 integer ErrAction 
+
+Word: ?doserr
+
+\ General error check after DOS function calls, delivers the information
+\ provided by Int 21h, function 59h. Leaves f=0 if an error has occurred. 
+Label ?doserr   ( -- f=ax )
+     u<
+     if   push es  push si  
+          sub bx, bx  mov ah, # $59  int $21
+          pop si  pop es
+          mov cs: adr Err# ax   
+          mov cs: adr ErrClass bh byte   
+          mov cs: adr ErrAction bl byte
+          sub ax, ax
+     else mov cs: adr Err# # 0
+     then mov bx, cs  mov ds, bx
+     1push 
+
+Group: Files
+
+The file words are easy to implement (once we have decided on the error
+handling). Most words deliver some information, which is zero in case
+of an error. Detailed knowledge can then be obtained from Err# ,
+ErrClass and ErrAction and a DOS book explaining the codes.
+
+In addition to Read and Write , Holon offers file access words in the
+form of @h !h etc. These words expect a filehandle and assume that
+the filepointer is at the desired place already. The access words do
+not deliver error information directly but you can check for errors
+testing Err# after every access. 
+
+Word: mkfile
+
+\ Creates a new file with name at "adr, delivers handle number or error
+\ h=0. [Error information is contained in Err#, ErrClass and ErrAction] 
+Code mkfile   ( "adr -- h )
+     call >asciiz
+     mov ah, # $3C  sub cx, cx  int $21
+     jmp ?doserr 
+
+Word: <open>
+
+\ Opens file at "adr (counted string) according to mode in AL [call only
+\ from Codeword]. 
+Label <open>   ( "adr -- h )
+     call >asciiz
+     mov ah, # $3D  int $21
+     jmp ?doserr 
+
+Word: open-r
+
+\ Opens file "adr as read-only, returns handle or 0=error. 
+Code open-r   ( "adr -- h )
+     mov al, # 0
+     jmp <open> 
+
+Word: open-r/w
+
+\ Opens file "adr for read and write, returns handle or 0=error. 
+Code open-r/w   ( "adr -- h )
+     mov al, # 2
+     jmp <open> 
+
+Word: <lseek>
+
+\ Positions pointer in file h at distance d according to mode in AL. 
+Label <lseek>   ( d h -- d )
+     pop bx  pop cx  pop dx
+     mov ah, # $42  int $21  
+     xchg ax, dx  push dx
+     jmp ?doserr 
+
+Word: lseek
+
+\ Positions the pointer in file h at d bytes from the beginning. 
+Code lseek   ( d h -- d )
+     mov al, # 0  
+     jmp <lseek> 
+
+Word: lseek+
+
+\ Moves the pointer in file h d bytes relative to current position. 
+Code lseek+   ( d h -- d )
+     mov al, # 1
+     jmp <lseek> 
+
+Word: lseek++
+
+\ Positions the pointer in file h d bytes relative to the end. 
+Code lseek++   ( d h -- d )
+     mov al, # 2
+     jmp <lseek> 
+
+Word: Filelength
+
+\ Obtains length d of file h and positions pointer at end of file. 
+: Filelength   ( h -- d )
+     0. rot lseek++  ; 
+
+Word: FileReset
+
+\ Resets file pointer to start of file. 
+: FileReset   ( h -- )
+     0. rot lseek 2drop  ; 
+
+Word: MovePointer
+
+\ Move pointer n places in file h. 
+: MovePointer   ( h n -- )
+     s>d rot lseek+ 2drop  ; 
+
+Word: FilePointer
+
+\ Delivers current pointer position d in file h. 
+: FilePointer   ( h -- d )
+     0.0 rot lseek+  ; 
+
+Word: duph
+
+\ Duplicates handle used for DUPH CLOSE assure writing of output to file. 
+Code duph   ( h1 -- h2 )
+     pop bx
+     mov ah, # $45  int $21
+     jmp ?doserr 
+
+Word: close
+
+\ Closes file with handle h, error if f=0. 
+Code close   ( h -- f )
+     pop bx
+     mov ah, # $3E  int $21
+     jmp ?doserr 
+
+Word: rename
+
+\ Renames file "adr1 to name "adr2, error if f=0. b35-1 
+Code rename   ( "adr1 "adr2 -- f )
+     call >asciiz  mov ax, dx            
+     call >asciiz  mov di, ax           
+     push es  mov ax, ds  mov es, ax 
+     mov ah, # $56  int $21  
+     u< if sub ax, ax then 
+     pop es  1push 
+
+Word: rmfile
+
+\ Deletes file "adr, error if f=0. 
+Code rmfile   ( "adr -- f )
+     call >asciiz
+     mov ah, # $41  int $21
+     jmp ?doserr 
+
+Word: set-r/w
+
+\ Set file attributes to read and write, no archive, no system file. 
+Code set-r/w   ( "adr -- f )                                \ 4.902
+     call >asciiz
+     mov ah, # $43  mov al, # 1  mov cx, # 0   int $21
+     jmp ?doserr 
+
+Word: FileEx?
+
+\ Tests if file "adr exists, lets file stay closed. 
+: FileEx?   ( "adr -- f )
+     open-r dup if dup close drop then 0>  ; 
+
+Group: Read&Write
+
+Word: read
+
+\ Reads u1 bytes from current position in file with handle h to 
+\ dbuf (seg:off). Returns number of bytes read or error (=0)
+\ If u2<u1, the end-of-file has been reached too early. 
+Code read   ( dbuf u1 h -- u2 )
+     pop bx  pop cx  pop dx  pop ds
+     mov ah, # $3F  int $21
+     jmp ?doserr 
+
+Word: write
+
+\ Writes u1 bytes from dbuf (seg:off) to file h starting at the current
+\ position. Returns number of bytes written u2 or error.
+\ If u2<u1, the medium is full. 
+Code write   ( dbuf n1 h -- n2 )
+     pop bx  pop cx  pop dx  pop ds
+     mov ah, # $40  int $21
+     jmp ?doserr 
+
+Word: EOF?
+
+\ EOF? is <0, if we tried to read past the end of the file. 
+0 integer EOF? 
+
+Word: ?rwError
+
+\ Error check after read/write-functions, fetches information from DOS
+\ via int 21h, fkt. 59h. If error: Err#>0. Also checks for EndOfFile. 
+Label ?rwError   ( -- )
+     u<
+     if   push es  push si  
+          sub bx, bx  mov ah, # $59  int $21
+          pop si  pop es
+          mov cs: adr Err# ax   
+          mov cs: adr ErrClass bh byte   
+          mov cs: adr ErrAction bl byte
+          sub ax, ax
+     else mov cs: adr Err# # 0
+          sub ax, cx  mov cs: adr EOF? ax
+     then mov bx, cs  mov ds, bx
+     next 
+
+Word: <@h>
+
+\ Subroutine, reads number of bytes given by CX from file h to data 
+\ stack. Err#>0 if error. 
+Label <@h>   ( h -- b,n,d )
+     pop bx  
+     sub sp, cx   cmp cx, # 1  <= if  dec sp  then     
+     mov dx, ss  mov ds, dx  mov dx, sp
+     mov ah, # $3F  int $21
+     jmp ?rwError 
+
+Word: c@h
+
+\ Reads byte b from file h at current position, increases file pointer. 
+Code c@h   ( h -- b )
+     mov cx, # 1  
+     jmp <@h> 
+
+Word: @h
+
+\ Reads n from file h and advances file pointer. 
+Code @h   ( h -- n )
+     mov cx, # 2  
+     jmp <@h> 
+
+Word: d@h
+
+\ Reads double number d from file h and advances file pointer. 
+Code d@h   ( h -- d )
+     mov cx, # 4  
+     jmp <@h> 
+
+Word: <!h>
+
+\ Subroutine, writes number of bytes given by cx from stack to file h
+\ Err#>0 if error. 
+Label <!h>   ( b,n,d h -- )
+     pop bx  
+     mov dx, ss  mov ds, dx  mov dx, sp  
+     mov ah, # $40  int $21
+     cmp cx, # 1  <= if inc cx then  
+     add sp, cx          \ reset sp here (int $21 uses stack)
+     jmp ?rwError 
+
+Word: c!h
+
+\ Stores byte b on file h at current position and advances file pointer. 
+Code c!h   ( b h -- )
+     mov cx, # 1   
+     jmp <!h> 
+
+Word: !h
+
+\ Stores word n on file h and advances file pointer. 
+Code !h   ( n h -- )
+     mov cx, # 2   
+     jmp <!h> 
+
+Word: d!h
+
+\ Stores double number d on file h and advances file pointer. 
+Code d!h   ( d h -- )
+     mov cx, # 4   
+     jmp <!h> 
+
+Word: "!h
+
+\ Writes counted string at seg:off to file h at current position. 
+: "!h   ( seg off h -- )
+     >r 2dup c@l 1+ r>  write drop  ; 
+
+Word: "@h
+
+\ Reads string from current position in file h into stringbuffer at
+\ seg:off, if space available. f=0 if success. 4.222 
+: "@h   ( seg off h -- f )
+     dup>r c@h >r                       \ r: -- h n-file
+     2dup 1- c@l                        \ length of stringbuf
+     r@                                 \ -- seg off n-mem n-file
+     <                                  \ no space?
+     if   2drop 2r> 2drop  -1           \ set flag
+     else r> 1+                         \ -- seg off n+1
+          r@ -1 MovePointer             \ backup pointer
+          r> read drop  0               \ read n+1 bytes
+     then  ; 
+
+Group: Time&Date
+
+Word: time@
+
+\ Fetches system time. 
+Code time@   ( -- hnd sec min h )
+     mov ah, # $2C  int $21
+     sub ax, ax  mov al, dl byte  push ax
+     mov al, dh byte  push ax
+     mov al, cl byte  push ax
+     mov al, ch byte 
+     1push 
+
+Word: date@
+
+\ Fetches system date. 
+Code date@   ( -- day month year )
+     mov ah, # $2A  int $21
+     sub ax, ax  
+     mov al, dl byte  push ax
+     mov al, dh byte  push ax
+     push cx
+     next 
+
+Word: "Time
+
+\ System time as string 'hh:mm:ss'. 
+: "Time   ( -- "adr )
+     theBase >r decimal  
+     time@  ( s/100 s m h )  >r >r 
+     0 <# # # [char] : hold 2drop r> 0 # # [char] : hold 
+     2drop r> 0 # # "#> nip 
+     r> is theBase  ; 
+
+Word: "Date
+
+\ System date as string 'dd.mm.yy'. 
+: "Date   ( -- "adr )
+     theBase >r decimal  date@  ( d m y )
+     0 <# # # [char] . hold nip # # [char] . hold nip # # "#>
+     r> is theBase  ; 
+
+Word: .Time
+
+\ Prints system time. 
+: .Time
+     "Time "type  ; 
+
+Word: .Date
+
+\ Prints system date. 
+: .Date
+     "Date "type  ; 
+
+Word: tick0
+
+\ Stores the current tick count for the measurement of time intervals. 
+0 integer tick0 
+
+Word: ticks
+
+\ The system clock delivers 18 ticks per second. For delays up to 14 s
+\ the lowest byte of the system clock suffices.
+\ 5.004 DOS timer 100/sec. 
+: ticks   ( -- n )
+\     $40 $6C c@l  ;
+     time@ 2drop 100 * +  ;   ( -- 0...5999 ) 
+
+Word: Seconds
+
+\ Seconds of system timer. 
+: Seconds   ( -- u )
+\     ticks 18 /  ;
+     ticks 100 /  ;   \ 5.004 
+
+Word: Now
+
+\ Start of a timing routine. 
+: Now
+     ticks is tick0  ; 
+
+Word: Ticks?
+
+\ Delivers true if u ticks have passed since NOW. 
+: Ticks?   ( u -- f )
+\     ticks tick0 - 256 + 256 mod <  ;
+     ticks tick0 - 6000 + 6000 mod <  ;   \ 5.004 
+
+Word: msec?
+
+\ 5.004   1 tick = 10 ms 
+: msec?   ( u -- f )
+\     55 / ticks?  ;
+     10 / ticks?  ; 
+
+Word: MSec
+
+\ Waits u milliseconds (u>>50, 55 msec uncertainty!), minimum 1 tick.
+\ 5.004 Aufl”sung 10 ms. 
+: MSec    ( u -- )
+\     now 55 / 1+ begin switch dup Ticks? until drop  ; 
+     now 10 / 1+ begin switch dup Ticks? until drop  ; 
+
+Word: 1Sec
+
+\ Waits 1 second. 
+: 1Sec
+     1000 msec  ; 
+
+Group: Memory
+
+Word: MoreMemory
+
+Text: MoreMemory
+   The following words use the DOS mechanism of allocating memory space
+outside the program's reserved memory. 
+
+Word: malloc
+
+\ Allocates u paragraphs in memory for use of the application, returns
+\ segment address and true or only false. 
+Code malloc   ( u -- seg true | false )
+     pop bx
+     mov ah, # $48  int $21  u< 
+     if   sub ax, ax 
+     else push ax  mov ax, # -1 
+     then 1push 
+
+Word: mfree
+
+\ Returns allocated memory at segment seg to DOS, err#=0 if ok. 
+Code mfree   ( seg -- err# )
+     mov cx, es  pop es
+     mov ah, # $49  int $21
+     u>= if sub ax, ax then
+     mov es, cx
+     1push 
+
+Group: Arrays
+
+Word: Arrays
+
+Text: Arrays
+   Multidimensional data types pose the problem of holding the indices
+clear from the data and messages. Holon implements array objects with a
+quasi-algebraic notation. You can write MATRIX( i j ). The magic is
+performed by the word ). 
+
+Word: Arrays-2
+
+Text: Arrays-2
+   The indices of arrays can be literals, loop indices, objects, and
+arrays. Holon accepts the following expressions:
+
+m( 1 2 )                      \ delivers element 1 2 of matrix m(
+m( i j ) add m( j i )         \ i j are loop indices
+33 is m( x y )                \ x,y are integer objects 
+
+Word: Arrays-3
+
+Text: Arrays-3
+   You can define any type of array with the ArrayType: mechanism. We
+provide sample definitions for vectors and matrices with integer
+elements. This can be extended to doubles and floating point arrays.
+   Bounds are not checked in the examples, but it is a simple matter to
+include bounds checking in the word that delivers the data address. 
+
+Word: ArrayType:
+
+\ Defines an indexed data structure in algebraic notation: DATA( i .. ) 
+Compiler: ArrayType:
+    Intp: DefineArray ;
+    Comp: NoComp ;
+    Code: doVar 
+
+Word: )
+
+\ Ends an indexed data structure and executes or compiles the method that
+\ is applied to the indexed element of the data structure. Can be used
+\ for n-dim. data; the indices are pushed below <obj> and <method>. 
+Compiler: )
+    Intp: Pop&RunObject ;   
+    Comp: Pop&CompObject ; 
+
+Word: vadr
+
+\ Leaves address of i-th integer element of data in obj. 
+: vadr   ( i obj -- adr )
+     swap 2 * + 2 +  ; 
+
+Word: @v
+
+\ Leaves value of i-th integer element in obj. 
+: @v   ( i obj -- n )
+     vadr @  ; 
+
+Word: !v
+
+\ Stores n in i-th elemnt of obj. 
+: !v   ( n i obj -- )
+     vadr !  ; 
+
+Word: +!v
+
+\ Adds n to the i-th elemnt of obj. 
+: +!v   ( n i obj -- )
+     vadr +!  ; 
+
+Word: vPrint
+
+\ Prints all elements of vector obj. Call without index: print V( ) 
+: vPrint   ( obj -- )
+     cr dup @ times i over @v 6 .r loop drop cr  ; 
+
+Word: Vector
+
+\ Defines an +n dimensional Vector. 
+ArrayType: Vector
+     Data: dup , 0 do 0 , loop   ( +n -- )
+  Methods: @v   !v  +!v  vadr  vPrint
+ Messages: get  is  add  adr   print 
+
+Word: xx(
+
+\ Sample vector. 
+10 Vector xx( 
+
+Word: TestXX
+
+\ Demonstrating the use of a vector. You can also test the vector on the
+\ command line in test mode (Ctl+F4). 
+: TestXX
+    xx( 3 )  33 is xx( 3 )  xx( 3 )  22 add xx( 3 )  xx( 3 )  ; 
+
+Word: mij
+
+\ Leaves address adr of element i j in matrix data space obj. 
+: mij   ( i j obj -- adr )
+     >r swap r@ @ * + 2* r> + 4 +  ; 
+
+Word: @m
+
+\ Fetches matrix element i j. 
+: @m   ( i j obj -- n )
+     mij @  ; 
+
+Word: !m
+
+\ Stores n in matrix element i j. 
+: !m   ( n i j obj -- )
+     mij !  ; 
+
+Word: +!m
+
+\ Adds n to matrix element i j. 
+: +!m   ( n i j obj -- )
+     mij +!  ; 
+
+Word: mPrint
+
+\ Prints all elements of matrix obj. Call without index: print m( ) 
+: mPrint   ( obj -- )
+     dup 2+ @ ( m ) 0
+     do   cr dup @ ( n ) 
+          times dup j i rot @m 6 .r loop 
+     loop drop cr  ; 
+
+Word: Matrix
+
+\ Defines an m*n dim. matrix. 
+Arraytype: Matrix
+     Data: 2dup , , * 0 do 0 , loop   ( m n -- )
+  Methods: @m   !m   +!m   mij   mPrint
+ Messages: get  is   add   adr   print 
+
+Word: mm(
+
+\ Defines a 2*4 matrix. Hint: study the data space with F6=Code. 
+2 4 Matrix mm( 
+
+Word: TestMM
+
+\ Fills the array mm( i j ) with increasing numbers. Hint: Look up the
+\ data space of mm( with F6=Code. Play with the numbers on the command
+\ line. 
+: TestMM
+     2 0 do  4 0 do j 4 * i + is mm( j i ) loop  loop  ; 
+
+Group: Stacks
+
+Word: Stacks
+
+Text: Stacks
+   As a further example of objects, here is a stack type for 16-bit
+items. This stack has many uses, e.g. in a memory management handler. 
+
+Word: PopMsg
+
+\ The error messages for attempts to cross the stack limits are made 
+\ customizable to the particular type of stack in current use. 
+Doer PopMsg 
+
+Word: PushMsg
+
+Doer PushMsg 
+
+Word: SEmpty
+
+: SEmpty
+     ." Stack empty"  ; 
+
+Word: SFull
+
+: SFull
+     ." Stack overflow"  ; 
+
+Word: DefaultStackMsg
+
+( DefaultStackMsg )
+     make PopMsg SEmpty
+     make PushMsg SFull 
+
+Word: PopS
+
+\ A method that pops a value from the stack object. 
+: PopS   ( obj -- x )
+     2+ dup>r @
+     if   -1 r@ +!  r@ @ 1+ 2* r> + @
+     else r>drop PopMsg
+     then  ; 
+
+Word: PushS
+
+\ Pushes x to stack object. 
+: PushS   ( x obj -- )
+     2+ dup>r 2- @  r@ @ >
+     if   r@ dup @ 1+ 2* + !  1 r> +!
+     else r>drop drop PushMsg
+     then  ; 
+
+Word: InitS
+
+\ Initializes stack object. 
+: InitS   ( obj -- )
+     2+ 0!  ; 
+
+Word: PrintS
+
+\ Prints the contents of the stack. 
+: PrintS   ( obj -- )
+     4 + dup 2- @ 0 ?do dup @ u. 2+ loop drop  ; 
+
+Word: Stack
+
+\ Defines a stack object with space for u 16 bit items.
+\ | max | index |..data..| 
+ObjectType: Stack
+      Data: dup integer, 0 integer, 2* bytes,   ( u -- )  
+   Methods: PopS PushS noop PrintS InitS  
+  Messages: pop  push  adr  print  init 
+
+Word: aStack
+
+\ Example of a stack for 10 items 
+\ [Usage: 111 push aStack, 222 push aStack, print aStack, etc. ] 
+10 Stack aStack 
+
+Group: Screenstack
+
+Word: ScreenStack
+
+\ This is a simple memory manager for storing video screens. The screen
+\ stack contains pointers to allocated memory. 
+5 Stack ScreenStack 
+
+Word: ScreenBase
+
+\ In a full program we would have to consider different video modes,
+\ which can complicate this word. $B800 is valid for our current modes 2
+\ and 3 (mono or colour text). 
+: ScreenBase   ( -- seg off )
+     $B800 0  ; 
+
+Word: ScreenSize
+
+\ This is the size for text screens. 
+4000 integer ScreenSize 
+
+Word: SaveScreen
+
+\ Saves the current video screen to memory that is freshly allocated. 
+: SaveScreen
+     ScreenBase  ScreenSize 16 / malloc 
+     if   dup  push ScreenStack  0 ScreenSize movel
+     else 2drop 35 24 xy ." Can't save screen" 7 emit key drop
+     then  ; 
+
+Word: Restorescreen
+
+\ Fetches the most recently stored video screen and frees its allocated
+\ memory. 
+: Restorescreen
+     pop ScreenStack dup mfree drop 0
+     ScreenBase ScreenSize movel  ; 
+
+Group: CmdLine Arguments
+
+We follow the convention of C for command line arguments. ARGC delivers
+the number of arguments that are passed to the program on the command
+line. n ARGV delivers address and length of the n-the argument
+(counting from 0). - By courtesy of Ulrich Hoffmann. 
+
+Word: CmdLine
+
+\ Start of the command line argument text. DOS copies the command
+\ arguments to offset $80 in the PSP. 
+$80 constant CmdLine 
+
+Word: Advance
+
+\ Advandes u positions in the text at adr1, max. len1. 
+: Advance   ( adr1 len1 u -- adr2 len2 )
+     over min tuck - >r + r>  ; 
+
+Word: Skip
+
+\ Skips the following characters = c in the text starting at adr1.
+\ Delivers the address of the first character <> c, and the remaining
+\ length. 
+: Skip   ( adr1 len1 c -- adr2 len2 )
+     begin over 0= if drop exit then
+           >r over c@ r@ =
+     while 1 advance r>
+     repeat 
+     r>drop  ; 
+
+Word: Scan
+
+\ Looks for the next character c in the text starting at adr1. Delivers
+\ the address of the first c, and the remaining length. 
+: Scan   ( adr1 len1 c -- adr2 len2 )
+     begin over 0= if drop exit then
+           >r over c@ r@ -
+     while 1 advance r>
+     repeat 
+     r>drop  ; 
+
+Word: Argc
+
+\ Delivers number of arguments in command line. 
+: Argc   ( -- n )
+     CmdLine count bl skip 0
+     begin over while 1+ >r bl scan bl skip r> repeat 
+     nip nip  ; 
+
+Word: Argv
+
+\ Delivers address and length of the n-th {n=0,..} argument in the
+\ command line. len=0 if no argument available. 
+: Argv   ( n -- adr len )
+     CmdLine count bl skip rot 0
+     ?do bl scan bl skip loop
+     2dup bl scan nip -  ; 
+
+Word: atoi
+
+\ Converts the argument at adr n to a number. 
+: atoi   ( adr n -- n )                                     \ 4.231
+     2>r 0 2r> >number 3drop  ; 
+
+Word: ato"
+
+\ Converts the argument at adr n into a string. 
+: ato"   ( adr n -- "adr )                                  \ 4.231
+     dup pad c!  pad 1+ swap move  pad  ; 
+
+Word: ShowArguments
+
+\ Example: Lists the arguments. 
+: ShowArguments
+     argc 0 do cr ." Argument " i . ." : " i argv type loop  ; 
+
+Group: Interrupts
+
+Word: GetIntVec
+
+\ Fetches current interrupt vector u. 
+Code GetIntVec   ( u -- seg off )
+     pop ax  mov cx, es
+     mov ah, # $35  int $21
+     push es  push bx  mov es, cx
+     next 
+
+Word: SetIntVec
+
+\ Sets interrupt vector u to call the code at seg:off. 
+Code SetIntVec   ( seg off u -- )
+     pop ax  pop dx  pop ds
+     mov ah, # $25  int $21
+     mov bx, cs  mov ds, bx
+     next 
+
+Word: sti
+
+\ Sets (enables) interrupts. Used in colon words. 
+Code sti
+     sti  next 
+
+Word: cli
+
+\ Clears (disables) interrupts 
+Code cli
+     cli  next 
+
+Word: CtlBrk
+
+\ We use the control break interrupt to regain control from a program
+\ that is stuck in a loop. The interrupt increments the variable BRK?,
+\ which is tested by all control flow words. 6ah-2 Label. 
+Label CtlBrk
+     inc cs: Brk?  iret 
+
+Word: SetCtlBrk
+
+\ Installs the break key handler. 
+: SetCtlBrk
+     cs: CtlBrk $1B SetIntVec  ; 
+
+Group: CoroutineSwitching
+
+Word: doHalt
+
+\ Makes routine tHalt accessible from a colon word. tHalt ends program,
+\ stores the current state in the main task area and returns to the host. 
+Code doHalt
+     jmp tHalt 
+
+Word: CurXY
+
+\ A variable for storing the current cursor position x,y 
+0. double CurXY 
+
+Word: Halt
+
+\ Stores the screen and returns to the host in doHalt. If you press Tab
+\ on the host the program resets the screen and continues. 
+: Halt
+     >bye @ ['] bye = if bye then         \ in Turnkey Bye
+     @xy is CurXY Savescreen
+     doHalt
+     RestoreScreen CurXY xy  ; 
+
+Group: Tasking
+
+Word: Tasking
+
+Text: Tasking
+   Tasking allows the parallel execution of program words. A task
+consists of a task block and a task area. The task block points to the
+program word, that is currently run by the task. 
+   The program word can be changed, i.e. the same task can later be
+connected to a different program word.
+   The task block further points to a task area, when the task is
+activated. The task area contains the dynamic information of the task:
+the data and return stack and the user variables (including the task
+pointers, when the execution is switched to the next task). The task
+area is a stack segment. 
+
+Word: TaskObjects
+
+Text: TaskObjects
+   A task is built as an object that accepts the messages: is, start,
+stop, and continue. 
+   There are two ways to connect a procedure to a task:
+     -  ' Prog is Task
+     -  Make Task Prog 
+
+Word: theTask
+
+\ Points to the current task block. 
+0 integer theTask 
+
+Word: Area
+
+\ Fetches the task area (stack segment) from theTask. In Forth the task
+\ area is often called a user area. 
+: Area   ( -- up )
+     theTask 4 + @  ; 
+
+Word: Area!
+
+\ Stores n in offset u in the task area. 
+: Area!   ( n u -- )
+     Area swap !l  ; 
+
+Word: InitArea
+
+\ Sets up the task area of theTask for the start of the task. 
+: InitArea
+     0         2 area!          \ status=active
+     cs:       4 area!          \ point ip (=es:si) to ..
+     theTask   6 area!          \ .. taskblock=zca(proc)
+     cs:       8 area!          \ set cs
+     RP0      10 area!
+     SP0      12 area!  ; 
+
+Word: GetArea
+
+\ Allocates 512 bytes for a new task area, if available. 
+: GetArea   ( -- seg )
+     $20 malloc 
+     0= if ." No task memory available" 7 emit key drop then  ; 
+
+Word: LinkArea
+
+\ Stores the pointer to the current task area segment in the task block
+\ and links the task area to the task chain at the active task. 
+: LinkArea   ( seg -- )
+     dup theTask 4 + !        \ area pointer in taskblock
+     ss: 0 @l  over 0 !l      \ link area to next task
+     ss: 0 !l                 \ link current task to area
+     ; 
+
+Word: BuildArea
+
+\ Builds a new task area. 
+: BuildArea 
+     GetArea LinkArea  ; 
+
+Word: tStart
+
+\ Starts theTask. 
+: tStart 
+     is theTask  Area 0= if BuildArea then InitArea  ; 
+
+Word: tStop
+
+\ Stops theTask. 
+: tStop  
+     is theTask  -1 2 area!  ; 
+
+Word: tContinue
+
+\ Wakes theTask. If ip (=si) in the task area points to offset 4 in the
+\ taskblock, the task has run to completion and must be restarted. 
+: tContinue
+     is theTask
+     area 6 @l theTask 4 + <>      \ task has not ended?
+     if   0 2 area! 
+     else 35 24 xy ." Task has finished" 
+     then   ; 
+
+Word: Task
+
+\ Creates a new task and assigns a task block. Whenever the task is
+\ addressed the variable theTask points to the taskblock. 
+ObjectType: Task
+      Data: tHalt integer,        \ xt of taskingroutine (init: Halt)
+            tHalt integer,        \ emergency brake
+            0 integer,            \ task area, set at start
+   Methods: noop !  tstart tstop tcontinue  
+  Messages: get  is  start  stop  continue 
+
+Group: Taskkeys
+
+Word: Task&Keys
+
+Text: Task&Keys
+  Tasks cooperate and render control with the word Switch. A good time
+to switch is while waiting for user input. Therefore we define task
+versions of Key that include a switch. 
+
+Word: TaskKey?
+
+: TaskKey?
+     switch myKey?  ;                   \ 4.235 
+
+Word: TaskKey
+
+: TaskKey
+     begin TaskKey? until  NormalKey   ;     \ 4.114 
+
+Word: TaskKeys
+
+\ Activates the keys for task switching. 
+: TaskKeys
+     make key TaskKey
+     make key? TaskKey?  ; 
+

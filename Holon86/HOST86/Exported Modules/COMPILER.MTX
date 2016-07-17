@@ -1,0 +1,725 @@
+Module: Compiler
+
+Group: Diverses
+
+Word: LastDataLink
+
+0. double LastDataLink 
+
+Word: Appl
+
+\ xt von Applikation. 
+0. double Appl 
+
+Word: postpone?
+
+\ true wenn aktuelles Wort nicht immediate wirken soll. Gesetzt von
+\ Postpone, gelîscht von Interpreter VOR AusfÅhren von Wort (sonst
+\ kînnte postpone? nie gesetzt werden). Ist also nur fÅr ein Wort
+\ wirksam. 
+Flag postpone? 
+
+Word: NeuerCode
+
+: NeuerCode
+     zBegin is zEnd  xBegin is xEnd  0. is LastDataLink
+     mzBegin is mzHere  mxBegin is mxHereSeg 0 is mxHereOff
+     Codefile ?dup if close drop then InitCodefile
+     0. is Appl  clear Basis?  ; 
+
+Word: ColonHere
+
+\ Normalerweise zHere, bei fpc-Modell anders. 
+Doer ColonHere 
+
+Word: Compile,
+
+Doer Compile, 
+
+Group: NormWort
+
+Die Targetworte sind Actors mit je eigener Run- und Comp-Aktion und
+einem Codefeld. Die normalen Aktionen sind 'theCode Execute' bzw.
+'theCode ,', wobei theCode (der Inhalt des Codefeldes) ein execution
+token enthÑlt.
+Beim Laden eines Wortes wird der Actor zunÑchst als Normwort
+deklariert. Das Wort wird geladen und das xt in das Codefeld
+eingetragen.
+Beim Bilden spezieller Compilerworte werden die normalen Aktionen mit
+dem Meta-Mechanismus geÑndert. 
+
+Word: Voc=Meta
+
+( Voc=Meta )
+     Meta 
+
+Word: CompWort
+
+\ Wort, das beim Compilieren von AktivWort soeben bearbeitet wird. 
+0 integer CompWort 
+
+Word: IntpCode
+
+\ Hostcode fÅr imm. Aktion (frÅher RunCode). 67m 
+: IntpCode   ( -- mca )
+     CompWort IntpFeld @s  ; 
+
+Word: CompCode
+
+: CompCode   ( -- mca )
+     CompWort Compfeld @s  ; 
+
+Word: TheCode
+
+\ Liefert 32 Bit Token/Data/Adresse. 
+: TheCode   ( -- xt )
+     CompWort Codefeld d@s  ; 
+
+Word: ObjType?
+
+\ True wÑhrend der Definition eines Objekttyps. 
+Flag ObjType? 
+
+Word: #Methods
+
+\ Anzahl der Methoden im Objekt. 
+0 integer #Methods 
+
+Word: DoIntp
+
+: DoIntp
+     TheCode tExecute  ; 
+
+Word: Ablegen
+
+: Ablegen   ( d -- )
+     Target? 
+     if   compile,  
+     else swap doLiteral m,x m,x doLiteral m,x m,x  postpone? 
+          if   ['] compile,  clear postpone?
+          else ['] tExecute 
+          then m,x 
+     then  ; 
+
+Word: DoComp
+
+\ Beim Bilden eines Objekttyps legt sich theCode als 32 Bit XT in die
+\ Class-Tabelle. 
+: DoComp
+     TheCode  ObjType? 
+     if   m,z m,z  1 add #Methods
+     else Ablegen 
+     then  ; 
+
+Word: =Intp_
+
+:_ =Intp_   ( mca -- )
+     Aktivwort IntpFeld !s  ; 
+
+Word: =Comp_
+
+:_ =Comp_   ( mca -- )
+     Aktivwort Compfeld !s  ; 
+
+Word: =Code
+
+: =Code   ( d -- )
+     Aktivwort Codefeld d!s  ; 
+
+Word: NormWort
+
+: NormWort
+     ['] DoIntp =Intp_ ['] DoComp =Comp_  ; 
+
+Group: Interpret
+
+Word: State
+
+\ =0: Runmode, <>0: Compmode. 
+0 integer State 
+
+Word: Comp?
+
+: Comp?   ( -- f )
+     State  ; 
+
+Word: Intp?
+
+: Intp?   ( -- f )
+     State 0= ; 
+
+Word: vFind
+
+\ Sucht Word$ im Context Vokabular im Host. Liefert xt von Wort oder
+\ null. [xt bestimmen Åber Offset n von link zu cfa, Eintrag von
+\ Compilerwort:
+\ | cfa offset | data | n | link | name |]       [n: bit7=imm.bit ] 
+: vFind   ( -- imm? xt | 0 )
+     Context 
+     begin     @ dup
+     while     dup 2+ Word$ "<> 0= 
+               if   1- dup c@           \ Offset zu xt
+                    dup $80 and -rot    \ imm? Flag
+                    $7F and             \ Immediate-Bit abschneiden
+                    -                   \ xt
+                    exit 
+               then
+     repeat  ; 
+
+Word: tFind
+
+\ Liefert false, wenn Wort nicht gefunden und wenn nicht geladen. Erlaubt
+\ Rekursion: bei Selbstreferenz xt=zStart in Codefeld legen, damit DoComp
+\ spÑter die Adresse ablegt. 
+: tFind   ( -- eintrag | 0 )
+     FindEintrag dup is CompWort
+     if   CompWort geladen?
+          if   CompWort
+          else AktivWort CompWort = Comp? and    \ Selbstreferenz
+               Test? 0= and             \ Testmode ausklammern!
+               if   zStart =Code CompWort 
+               else true is Ungeladen? false
+               then
+          then
+     else false
+     then  ; 
+
+Word: Meta?
+
+\ True normalerweise, gelîscht von TARGET, forciert Einbinden von
+\ Targetwort in Metacode. 
+0 integer Meta? 
+
+Word: Target_
+
+\ Bei Metacode wird das folgende Wort im Target gesucht. 
+imm:_ Target_
+     clear Meta?  ; 
+
+Word: ?vWord
+
+\ Verarbeitet Metawort, mit eventuellem Postpone (Åberstimmt immediate).
+\ Bei POSTPONE TARGET TWORT das Wort TARGET ausfÅhren und erst TWORT
+\ postponen. 
+: ?vWord
+     vFind ?dup
+     if   ( imm? xt -- )
+          swap Postpone? 
+          if   over ['] Target_ <>      \ ist Wort <> TARGET ?
+               if drop false  clear Postpone? then
+          then
+          Intp? or if execute else m,x then
+          2r> 2drop 2r> 2drop
+     then  ; 
+
+Word: ?Assembler
+
+: ?Assembler
+     Assembler ?vWord  ; 
+
+Word: ?Meta
+
+: ?Meta
+     Meta ?vWord  ; 
+
+Word: ?Target
+
+: ?Target
+     tFind ?dup
+     if   State if CompFeld else IntpFeld then @s execute
+          2r> 2drop 
+     then  ; 
+
+Word: ?ungeladen
+
+\ Aktionen fÅr den 'ungeladen' Fall. 
+: ?ungeladen
+     ungeladen?
+     if   Loadselected? 
+          if endtry else " not loaded" NameMeldung then 
+     then ; 
+
+Word: zLit
+
+\ ErhÑlt zca von lit in Target 
+0. double zLit 
+
+Word: =Lit_
+
+Meta
+:_ =Lit_
+     ?>32 is zLit  ; 
+
+Word: zLiteral
+
+: zLiteral   ( d -- )
+     zLit compile, compile,  ; 
+
+Word: mLiteral
+
+: mLiteral   ( w -- )
+     doLiteral m,x m,x  ; 
+
+Word: 2mLiteral
+
+\ Die 32 bit Variante. 4.209 
+: 2mLiteral   ( d -- )
+     swap mLiteral mLiteral  ; 
+
+Word: tLiteral
+
+: tLiteral   ( d -- )
+     state 
+     if   Target? 
+          if   zLiteral 
+          else 32? if 2mLiteral else drop mLiteral then     \ 4.209
+          then
+     else ?>16 
+     then  ; 
+
+Word: dLiteral_
+
+\ Nur bei 16 Bit Targetsystem gebraucht. 
+:_ dLiteral_   ( d -- )
+     comp? if swap 0 tLiteral 0 tLiteral then  ; 
+
+Word: ?Number
+
+: ?Number
+     Word$ Number?
+     if   32? 
+          if   tLiteral
+          else dpl -1 = if tLiteral else dLiteral_ then
+          then
+     else " is unknown" NameMeldung 
+     then  ; 
+
+Word: Interpret
+
+\ In Metacode Targetworte gezielt bezeichnen, gilt nur fÅr das folgende
+\ Wort. 
+: Interpret
+     false is ungeladen?  
+     Assembler? if ?Assembler then
+     Target? 
+     if   Intp? if ?Meta then ?Target 
+     else Meta? if ?Meta then set Meta? ?Target 
+     then 
+     ?Ungeladen  ?Number  ; 
+
+Group: Steps
+
+Word: iStep
+
+\ Nummer des Steps {0..maxstep}, iStep=maxStep ist bereits im Folgewort. 
+0 integer iStep 
+
+Word: MaxStep
+
+\ Anzahl Steps im Wort, bestimmt beim Laden des Wortes. Max = 80. 
+0 integer MaxStep 
+
+Word: CurTable
+
+\ Platz fÅr maximal 80 Steps, grîssere Worte sollten geteilt werden. 
+create CurTable     160 allot 
+
+Word: ipTable
+
+create ipTable      320 allot 
+
+Word: ipAdr
+
+\ Liefert i-te Adresse in ipTable. 
+: ipAdr   ( i -- adr )
+     4 * ipTable +  ; 
+
+Word: ip()
+
+\ Liefert Instruction Pointer ip von i-tem Step. 
+: ip()   ( i -- ip )
+     ipAdr 2@  ; 
+
+Word: CurAdr
+
+\ Adresse in CursorTable von Cursor zu i-tem Step 
+: CurAdr   ( i -- adr )
+     2* CurTable +  ; 
+
+Word: +Step
+
+: +Step
+     DefCur iStep curAdr !  theIP iStep ipAdr 2!  1 add iStep
+     iStep 79 > 
+     if " Too many steps, please factorise word" LoadMeldung then  ; 
+
+Word: NormStep
+
+\ Wenn ip nicht Ñndert zu nÑchstem Step, wird nur der Cursor beim alten
+\ Step nachgetragen. Dies kommt vor z.B. bei Strukturen. 
+: NormStep
+     iStep if theIP iStep 1- ip() d= if -1 add iStep then then
+     +Step  ; 
+
+Word: Objekt?
+
+\ true wenn aktuelles Wort ein Objekt ist. 
+0 integer Objekt? 
+
+Word: ObjektStep
+
+\ Bei Objekten die Reihenfolge Message - Objekt umkehren und einen
+\ Eintrag fÅr die Methode generieren, die zur Message gehîrt. Wenn das
+\ Objekt ohne Message verwendet wird, bleibt es auch fÅr den Methoden-
+\ schritt markiert (aber GoSub geht zur Methode). 
+: ObjektStep
+     Objekt? 0<                         \ Message vorhanden?
+     if   -1 add iStep  iStep CurAdr @  +Step  is DefCur
+     else NormStep
+     then 32? if 4. else 2. then add theIP  +Step  false is Objekt?  ; 
+
+Word: >ColonStep
+
+: >ColonStep
+     Objekt? if ObjektStep else NormStep then  ; 
+
+Word: >CodeStep
+
+: >CodeStep
+     Opcode? if NormStep  false is Opcode? then  ; 
+
+Word: ErsterStep?
+
+\ True fÅr den allerersten Step [iStep kann nicht verwendet werden, da
+\ bei Objekten (z.B.) iStep spÑter auch gleich 0 gesetzt wird.] 
+0 integer ErsterStep? 
+
+Word: ColonWort?
+
+\ HÑlt fest, ob das Debugwort ein Colonwort ist. Wird anstelle von comp?
+\ verwendet, da in einem Colonwort auch Runmodus mîglich ist: [ ... ] . 
+0 integer ColonWort? 
+
+Word: Step
+
+\ Beim ersten Step feststellen, ob wir ein Colonwort debuggen. Dann
+\ entsprechende Steps bauen. 
+: Step
+     ErsterStep? if comp? is ColonWort? false is ErsterStep? then
+     ColonWort? if >ColonStep else >CodeStep then  ; 
+
+Word: .Steps
+
+: .Steps
+     cr curTable maxStep 1+ times dup i 2* + @ 7 u.r loop drop
+     cr ipTable maxStep 1+ times dup i 4 * + 2@ 7 d.r loop drop  ; 
+
+Group: wLoad
+
+Word: OldLinkfeld
+
+\ Adresse von altem Headerlinkfeld (bei Umdefinition) 
+0. double OldLinkfeld 
+
+Word: OldLink
+
+\ Inhalt von altem Headerlinkfeld 
+0. double OldLink 
+
+Word: HeadLinkfeld
+
+\ Aktuelles Linkfeld 
+0. double HeadLinkfeld 
+
+Word: theContext
+
+\ Lage (zadr) von Context-Zeiger in Target 
+0. double theContext 
+
+Word: =Context_
+
+:_ =Context_
+     ?>32 is theContext  ; 
+
+Word: ?Header
+
+\ Wenn ein Header generiert wurde, muss jetzt der Link gesetzt werden, in
+\ zCode und im Codefile. Vokabularlink aus dem Target lesen, da CONTEXT
+\ nur im Target gesetzt wird beim AusfÅhren des Vokabulars. 
+: ?Header
+     HeadLinkfeld d0= ?exit
+     reload?
+     if   OldLink HeadLinkfeld ?!z
+          zStart zEnd d=                \ neue Definition am Ende?
+          if HeadLinkfeld OldLinkfeld ?!z then
+     else theContext ?@z ?@z HeadLinkfeld ?!z
+          HeadLinkfeld theContext ?@z ?!z
+     then  ; 
+
+Word: Msg#
+
+\ Speichert die Message-Nummer an ein Objekt. Wenn =0, ist keine Message
+\ vorhanden und das Objekt verwendet Message Nummer 1. Muss bei neuem
+\ Load gelîscht werden, bei selektivem Load kann ein Wert hÑngenbleiben. 
+0 integer Msg# 
+
+Word: Here=IP
+
+\ CodeHere ist immer gleich zHere. 
+: Here=IP
+     ColonWort? if ColonHere else zHere then is theIP  ; 
+
+Word: wLoad
+
+\ DefCur zeigt auf nÑchstes Wort, ev. Text fÅr " etc. State nicht testen
+\ bei Objecttypes. 
+: wLoad
+     decimal  0 is >in  0 is iStep  0 is Msg#   
+     true is ErsterStep? false is ColonWort?
+     false is OpCode?  false is Objekt?
+     begin     debug? if Here=IP then
+               ParseWord upcase Word$ >in is DefCur  Interpret
+               debug? if Step then  >in DefLÑnge 2- >
+     until  
+     State ObjType? 0= and  
+     if " Definition not finished" LoadMeldung then         \ 4.158
+     Assembler? if a; ?ass then                             \ 4.132
+     debug? if iStep is maxStep  Here=IP  +Step  0 is DefCur then
+     ?Header  ; 
+
+Group: LoadWort
+
+Word: NameOk?
+
+: NameOk?   ( -- f )
+     AktivWort dup InAlfa? swap Name c@s 0> and  ; 
+
+Word: OldBase
+
+0 integer OldBase 
+
+Word: ObjStack
+
+\ Speichert das verzîgerte Object. Tiefe=20, bis zu 5 items pro Objekt
+\ gespeichert, d.h. 4 Objekte stapeln. 
+20 Stack ObjStack 
+
+Word: ObjStackFull
+
+: ObjStackFull
+     " Too many objects" KurzMeldung EndTry  ; 
+
+Word: ObjStackEmpty
+
+: ObjStackEmpty
+     " Sorry, object mismatch" KurzMeldung EndTry  ; 
+
+Word: InitLoad
+
+: InitLoad
+     zCodefenster xCodefenster  Normwort  Def>Tib  clear State  
+     set Target? clear Assembler?  0. is HeadLinkfeld  
+     make PushMsg ObjStackFull  make PopMsg ObjStackEmpty
+     init ObjStack  set Meta?  clear ObjType?  0 is zOffset  
+     zCodeMitBreakFÅllen  ; 
+
+Word: KeinPlatz?
+
+\ Hat neuer zCode oder xCode keinen Platz am alten Ort? 
+: KeinPlatz?   ( -- f )
+     zca zStart d= zPlatz? 0= and
+     xca xStart d= xPlatz? 0= and or  ; 
+
+Word: ?StackOK
+
+: ?StackOK
+     depth 0< if " Sorry, stack underflow" LoadMeldung then  ; 
+
+Word: Load&Send
+
+\ Wenn z oder/und x keinen Platz haben, beide laden am korrigierten Ort.
+\ Erst den xCode, dann den zCode, der den xCode anspricht! Zum Schluss
+\ den Jump zum neuen zCode ablegen. Dann sollte es sicher sein. 
+: Load&Send
+     wLoad  ?StackOK                     \ 4.704
+     Target? 
+     if   KeinPlatz?
+          if   zPlatz? if zStart else zEnd then >zFenster
+               xPlatz? if xStart else xEnd then >xFenster
+               wLoad
+          then ?xSendCode ?zSendCode 
+     then  ; 
+
+Word: ?Load&Send
+
+\ Nur laden, wenn Target an Bord, damit Code in Host und Target
+\ Åbereinstimmt. 
+: ?Load&Send
+     Monitor? 
+     if   Load&Send 
+     else " Sorry, loading not possible when target offline"
+          LoadMeldung
+     then  ; 
+
+Word: CompInfo
+
+Doer CompInfo 
+
+Word: ShowCompInfo
+
+: ShowCompInfo
+     ClrStatus xyStatus theBase hex CompInfo normal is theBase  ; 
+
+Word: LoadOhneTarget?
+
+\ ZielsystemabhÑngig. H-11:true, H-86:false. 
+Doer LoadOhneTarget? 
+
+Word: LoadAktivWort
+
+: LoadAktivWort
+     NameOk? 0= ?exit  theBase is OldBase  InitLoad 
+     LoadOhneTarget? if try Load&Send else try ?Load&Send then 
+     OldBase is theBase  tryError? 
+     if   Definition -fw is DefCur  0 is mxHereOff 
+     else AktivWort SetLadeflag 
+     then clear State  
+     LoadAll? 0= tryError? 0= and if ShowCompInfo then  
+     CloseMCode   ; 
+
+Word: LoadWort
+
+: LoadWort
+     false is LoadSelected? LoadAktivWort  ; 
+
+Group: LoadAll
+
+Word: LoadGruppe
+
+\ Modus=Wort. 
+: LoadGruppe
+     KeineWorte? ?exit
+     clear tryError?  ErstesWort
+     begin     AktivWort geladen? 0=
+               if   LoadAll? if try @Text else .Worte then
+                    LoadWort
+               then ?key 'Esc = if set tryError? then
+               LetztesWort? tryError? or 0=
+     while     AktivWort NachFolger is AktivWort
+     repeat  ; 
+
+Word: LoadModul
+
+: LoadModul
+     KeineGruppen? ?exit     
+     clear tryError?  GruppeFenster wipe
+     ErsteGruppe
+     begin     GruppenZeigen LoadGruppe
+               LetzteGruppe? tryError? or 0=
+     while     AktivGruppe NachFolger is AktivGruppe
+     repeat  ; 
+
+Word: NewCode?
+
+\ Gesetzt bei neuem Programm, gelîscht bei LoadAll und ClearCode. 
+Flag NewCode? 
+
+Word: ClearCode
+
+\ Setzt auch Target zurÅck (schaltet laufende Tasks aus). 
+: ClearCode
+     AktivWort AktivGruppe AktivModul
+     ClearAll NeuerCode
+     is AktivModul is AktivGruppe is AktivWort
+     .Module ShowCompInfo  clear NewCode?
+     try InitTarget  ; 
+
+Word: StartLoadall
+
+: StartLoadall
+     %Wort is Modus WortDisplay  Wortfenster wipe  WipeText 
+     set LoadAll?  NewCode? if ClearCode then  ; 
+
+Word: LoadAll
+
+\ Clear Status (der von NewCode angezeigt wird). [FÅr Display auffrischen
+\ genÅgt .Module.] 
+: LoadAll
+     clear tryError? StartLoadall  tryError? ?exit
+     " Loading all words" Meldung  ClrStatus      
+     ErstesModul
+     begin     ModuleZeigen LoadModul
+               LetztesModul? tryError? or 0=
+     while     AktivModul Nachfolger is AktivModul
+     repeat
+     clear LoadAll?  set Basis?
+     ShowCompInfo  ; 
+
+Group: LoadSelected
+
+Word: NotLoadable
+
+\ Meldung erscheint bei Stackoverflow, wenn Wort zuviele Levels von
+\ Unterworten ruft, und auch bei Selbstreferenz. 
+: NotLoadable
+     AktivWort Compwort = Assembler? and
+     if   " Sorry, self-reference is not possible in assembler code"
+     else " Sorry, this word is not loadable (not a program word?)" 
+     then Loadmeldung  ; 
+
+Word: GotoSubWord
+
+\ Selbstreferenz detektieren. [GoWort holt auch den Text. Daher PushMsg
+\ vor jedem Push neu setzen.] 
+: GotoSubWord
+     make PushMsg NotLoadable  AktivWort push WortStack
+     CompWort GoWort  ; 
+
+Word: BackToUpperword
+
+\ GoWort holt auch den Text. 
+: BackToUpperword
+     pop WortStack GoWort  ; 
+
+Word: LoadCompleteWord
+
+\ [GotoSubword rufen ohne Try, da Try in GoWort.] 
+: LoadCompleteWord
+     begin     ?key 'Esc = is MsgKey
+               LoadAktivWort MsgKey ?exit
+               Ungeladen?
+     while     GotoSubWord tryError? ?exit
+     repeat  ; 
+
+Word: LoadBasis
+
+: LoadBasis
+     Basis? ?exit  " Loading Basis module" Meldung
+     AktivWort
+     ErstesModul  Modulezeigen
+     set LoadAll? 
+     LoadModul clear LoadAll? set Basis?
+     tryError? if 'Esc is MsgKey then
+     GoWort ShowAll  ; 
+
+Word: WorteZeigen?
+
+\ Gesetzt in WortCases3 . F3=>true, Sft+F3=>false. 
+Flag WorteZeigen? 
+
+Word: LoadSelected
+
+\ Wenn aktuelles Wort in Basismodul liegt, nur das Wort laden; sonst
+\ Basismodul und selektiv alle benîtigten Worte laden. Eventuell Worte
+\ nicht zeigen, die geladen werden. 
+: LoadSelected
+     ErstesModul? if LoadWort exit then
+     0 is MsgKey  LoadBasis
+     init WortStack  set Loadselected?
+     begin     MsgKey if clear LoadSelected? exit then
+               try LoadCompleteWord 
+               tryError? if clear LoadSelected? exit then
+               WorteZeigen? if WorteZeigen then  SubWord?  
+     while     BackToUpperWord
+     repeat  clear LoadSelected?  Wortezeigen  ; 
+

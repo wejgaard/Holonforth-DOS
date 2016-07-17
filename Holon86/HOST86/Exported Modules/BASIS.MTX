@@ -1,0 +1,304 @@
+Module: Basis
+
+Group: TheTarget
+
+ 
+
+Word: TheProgram
+
+Text: TheProgram
+This is the beginning of the target program (= application). The first
+module(s) contain the kernel words of Forth. The program is built
+interactively in a seperate codespace of its own. 
+
+Every detail of the program is defined in Holon, nothing is hidden. 
+
+Word: ForthModel
+
+Text: ForthModel
+The program is based on a Forth machine (kernel). Holon-86 uses the
+Forth model of F-PC, which makes excellent use of the properties of the
+80x86 processors. Holon defines many kernel routines differently, but
+the memory model and the register usage are identical. Therefore the
+information and utility modules available for F-PC can be used for the
+80x86 Holon target. 
+
+Word: TargetMemory
+
+Text: TargetMemory
+One 64-kB segment is devoted to executable processor code. Every Forth
+word has (some) code in this segment. It is also used for data, since a
+Forth program normally does not generate very much machine code and
+there is ample space in the code segment.
+
+The remaining DOS memory space is available for the definition of
+high-level Forth words. The "list" code of a colon word starts at a
+paragraph address, thus a 16 bit address covers 1 MB of code. 
+
+Group: SystemArea
+
+Word: >xSeg
+
+\ Offset of list code relative to the code-segment. This label must be at
+\ offset 100h in the code segment. It is used by runwords which address
+\ the list code, and is set by the host during development, or by COLD in
+\ a turnkey program. 
+wLabel >xSeg 
+
+Word: >main
+
+\ Receives xt of main target routine (application) in a turnkey program. 
+wLabel >main 
+
+Word: >Bye
+
+\ Receives xt of the exit routine in a turnkey program. 
+wLabel >Bye 
+
+Word: >zca
+
+\ Start of the main task block. - Points to the program word that is
+\ executed as the main task. 
+wLabel >zca 
+
+Word: >Halt
+
+\ Points to halt routine. 
+wLabel >Halt 
+
+Word: >UserArea
+
+\ Points to the user area of the main task (stack segment). 
+wLabel >UserArea 
+
+Word: tContext
+
+\ Points to the linkfield of the context (= current) vocabulary. 
+wLabel tContext 
+
+Word: Base
+
+\ Contains the base value for number conversions. Acts like a variable. 
+wLabel Base 
+
+Word: Brk?
+
+\ True if Ctl-Break has been pressed (and the CtlBrk interrupt handler is
+\ installed). 
+wLabel Brk? 
+
+Group: MainTask
+
+Word: MainTaskArea
+
+Text: MainTaskArea
+  The target is prepared for cooperative multitasking. During program
+development it runs as a task in parallel with the monitor. You can add
+your own tasks. 
+  The main task area is a 512 byte stack segment, which contains the
+data and return stacks, and the task status information (user area).
+Data and return stacks grow downwards from SPBase resp. RPBase. 
+
+Word: SPBase
+
+\ Offset to basis of datastack in task area. 
+$100 equ SPBase 
+
+Word: RPBase
+
+\ Basis of return stack. 
+$1FE equ RPBase 
+
+Word: FarOff
+
+\ Offset of task switch destination. 
+wLabel FarOff 
+
+Word: FarSeg
+
+\ Segment of task switch destination. 
+wLabel FarSeg 
+
+Word: Switch
+
+\ Taskswitch including change of codesegment, transfers control to the
+\ next active task. 
+Code Switch
+     cli  mov ax, sp  mov sp, # $0E
+     push ax  push bp  push cs  push si  push es
+     begin  sub sp, sp  pop ss  pop ax  or ax, ax  0= until
+     pop es  pop si  pop cx  pop bp  pop sp
+     sti  lodsw es:  mov bx, # FarOff word   
+     mov 0 [bx], ax  mov 2 [bx], cx  mov ds, cx
+     jmp far cs: 0 [bx] 
+
+Group: ForthMachine
+
+The Forth machine is direct threaded, i.e. an execution token (xt)
+points to executable machine code. The 80x86 registers are used as
+follows:
+     SS:SP     Data stack pointer (SP).
+     SS:RP     Return stack pointer (RP).
+     ES:SI     Instruction pointer (IP).
+     CS:AX     Point to body in code when calling codeinterpr. (W).
+     CS:=DS:   Code segment.
+     AX, BX, CX, DX, and DI are free for use without saving. 
+
+Word: Next
+
+\ The Forth inner interpreter. The macro inserts the code inline. 
+Macro: Next
+     lodsw es:  jmp ax  ; 
+
+Word: 1Push
+
+\ NEXT combined with PUSH AX. 
+Macro: 1Push
+     push ax  lodsw es:  jmp ax   ; 
+
+Word: 2Push
+
+\ Other useful macros. 
+Macro: 2Push
+     push dx  push ax  lodsw es:  jmp ax  ; 
+
+Word: 2Pop
+
+Macro: 2Pop
+     pop bx  pop ax  ; 
+
+Word: xSeg
+
+\ Delivers startsegment of list code. 
+Code xSeg   ( -- seg )
+     mov ax, >xSeg  1push 
+
+Word: doLiteral
+
+\ Runcode for Literal, followed by 16-bit data. Pushes data on stack at
+\ runtime. 
+Label doLiteral
+     lodsw es:  1push 
+
+Word: Execute
+
+\ Executes the word designated by xt. 
+Code Execute    ( xt -- )
+     pop ax  jmp ax 
+
+Word: noop
+
+\ No-operation, used as filler or dummy. 
+Code noop
+     next 
+
+Word: Exit
+
+\ Exits the current word. 
+Code Exit                                
+     mov si, 0 [bp]  mov es, 2 [bp]  add bp, # 4   
+     next 
+
+Word: bye
+
+\ Exits to DOS. 
+Code bye
+     mov ax, # $4C00   int $21 
+
+Word: Cold
+
+\ Starting code in a turnkey program. Sets the absolute value of xseg,
+\ sets up the exit word, links the maintask to itself and activates it,
+\ then jumps to the application. The turnkey operation inserts the xt of
+\ the application into the pointer >main in the codeimage. 
+Label Cold
+     mov ax, cs  add ax, >xSeg  mov >xSeg ax   
+     mov si, # >Bye   mov 0 [si], # ' Bye word   
+     mov ss: 0 ss  mov ss: 2 # 0 word
+     mov Base # 10
+     mov bp, # RPBase  
+     mov ax, >Main  jmp ax 
+
+Word: info>Host-1
+
+\ The host needs to know some addresses in the target. 
+( info>Host-1 )
+     SPBase =MainSP0                    \ Forth machine
+     RPBase =MainRP0                      
+     doLiteral =Lit                           
+     >Main =Main                        \ Turnkey
+     Cold =Cold                         
+     tContext =Context                  \ Vocabularies 
+
+Group: MonitorInterface
+
+Word: TheMonitorInterface
+
+Text: TheMonitorInterface
+  The target kernel contains a tiny interface to the monitor for the
+interaction of host and target. In order to execute a word in the
+target, the monitor initialises the target's task-area and calls the
+task scheduler Switch . The target returns to the host via the word
+tHalt. 
+
+Word: tHalt
+
+\ Normal return to monitor after execution of a target word. 
+Label tHalt  
+     pushf  push cs  push cs
+     \ the code continues with the following word 
+
+Word: DebugBreak
+
+\ Returns to monitor at a break point in debugging mode. 
+Label DebugBreak
+     push es  push ss  push ds  push bp
+     push di  push si  push dx  push cx  push bx  push ax
+     mov ss: 2 # -1 word
+     jmp ' Switch 
+
+Word: ErrorBreak
+
+\ Returns to monitor at an error break, when program is running wild. 
+Label ErrorBreak
+     mov base # -1 word                 \ error signal to host
+     jmp DebugBreak 
+
+Word: GoExecute
+
+\ Normal start of a word by the monitor. Ignores the CPU registers on the
+\ stack and jumps to the execution token on TOS. 
+Label GoExecute
+     add sp, # 26  pop ax  jmp ax 
+
+Word: GoCode
+
+\ Steps to a code word while debugging. 
+Label GoCode
+     pop ax  pop bx  pop cx  pop dx  pop si  pop di
+     pop bp  pop ds  pop ss  pop es
+     iret 
+
+Word: GoColon
+
+\ Steps to a colon word while debugging. 
+Label GoColon
+     pop ax  pop bx  pop cx  pop dx  pop si  pop di
+     pop bp  pop ds  pop ss  pop es
+     pop ax  pop ax  pop ax             \ iret data 
+     lodsw es:  jmp ax 
+
+Word: Info>Host-2
+
+\ This information is needed in the host for interactive testing of the
+\ target program in the interpreter and in the debugger. 
+( Info>Host-2 )
+     Base =Base                         
+     GoExecute =Start
+     tHalt =Return
+     tHalt >Halt !
+     GoCode =GoCode                    
+     GoColon =GoColon
+     DebugBreak =Break
+     ErrorBreak =ErrorBreak 
+

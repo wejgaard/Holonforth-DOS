@@ -1,0 +1,1174 @@
+Module: Meta
+
+Group: Mechanismus
+
+Word: SkipName_
+
+\ Holt folgendes Wort (=Name, hoffentlich) aus dem Text und macht nichts
+\ damit -- schiebt den Textzeiger Åber den Namen. 
+:_ SkipName_   ( text / -- )
+     ParseWord  ; 
+
+Word: Code'
+
+\ Sucht name und liefert xt, ausser Wort name ist ungeladen. 
+: Code'    ( name / -- xt )
+     ParseWord upcase Word$ tFind ?dup
+     if   Codefeld d@s
+     else ungeladen?
+          if   LoadSelected? 
+               if   endTry 
+               else " not loaded" NameMeldung
+               then
+          else " not found" NameMeldung
+          then
+     then  ; 
+
+Word: NoIntpAction
+
+\ NoIntp setzt neu Intp-Zeiger hierher, :: kein Extracode bilden. 
+: NoIntpAction   
+     " : Sorry, can only be used compiling" NameMeldung ; 
+
+Word: NoCompAction
+
+: NoCompAction
+     " : Sorry, can only be used interpreting" NameMeldung  ; 
+
+Word: !NoIntp_
+
+: !NoIntp_
+     ['] NoIntpAction =Intp_  ; 
+
+Word: !NoComp_
+
+: !NoComp_
+     ['] NoCompAction =Comp_  ; 
+
+Word: ClearHostword
+
+\ Lîscht das angefangene Host-Colonwort. Dropt dabei den von ':'
+\ abgelegten Compilertest-Code 77. 
+: ClearHostword   ( 77 -- )
+     drop 0 is zBytes Skipname_ clear State  ; 
+
+Word: NoIntp_
+
+\ Lîscht den angefangenen Hostcode und setzt Intpfeld direkt auf
+\ NoIntpAction, anstatt es indirekt Åber Code zu rufen. 
+imm:_ NoIntp_
+     ClearHostword !NoIntp_  ; 
+
+Word: NoComp_
+
+\ Wie NoIntp. 
+imm:_ NoComp_
+     ClearHostword !NoComp_   ; 
+
+Word: Intp'_
+
+\ Das Compwort suchen und dessen ImmCode als Literal ablegen in mCode. 
+imm:_ Intp'_   ( name / )
+    Code' 2drop IntpCode mliteral  ; 
+
+Word: Comp'_
+
+\ Obsolet, aber eventuell wieder nÅtzlich... 
+imm:_ Comp'_   ( name / )
+     Code' 2drop Compcode mliteral  ; 
+
+Word: Intp,_
+
+\ Imm-Aktion des Compwortes in eine Aktion des aktuellen Wortes einbinden
+\ (s. Targetwort Create). 
+:_ Intp,_
+     IntpCode m,x  ; 
+
+Word: Comp,_
+
+:_ Comp,_
+     Compcode m,x  ; 
+
+Word: Code,_
+
+\ Code des Compwortes im Target ablegen. 
+:_ Code,_
+     TheCode compile,  ; 
+
+Word: TheCode,
+
+\ Code des Compwortes als Literal in Target oder Meta legen. 
+: TheCode,
+     TheCode tLiteral  ; 
+
+Word: '_
+
+\ Liefert xt von Targetwort name pfannenfertig (16/32 Bit). 
+:_ '_   ( name / -- xt )
+     Code' ?>16  ; 
+
+Word: ?mStructure
+
+\ Strukturtest fÅr Metacode. [Getrennt von Strukturtests in Targetcode.]
+\ 4.210 
+: ?mStructure   ( i1 i2 -- )
+     2dup <>
+     if   " Sorry, wrong structure" NameMeldung
+     else 2drop
+     then  ; 
+
+Group: Ablegen
+
+Word: do-c,
+
+\ Bei RAM-ROM Trennung Kopie in Datenbereich im RAM. 
+Doer do-c, 
+
+Word: c,_
+
+\ Schreibt Byte in Datenbereich. TargetabhÑngig. 
+:_ c,_          
+     do-c,  ; 
+
+Word: do,
+
+\ Normalerweise = ,z aber auch gleichzeitiges Ablegen in Daten mîglich
+\ (,x) 
+Doer do, 
+
+Word: ,_
+
+\ Schreibt word in Datenbereich = CPU Code. 
+:_ ,_  
+     do,  ; 
+
+Word: doHere
+
+Doer doHere 
+
+Word: Here_
+
+\ Codezeiger in Datenbereich. 
+:_ Here_       
+     doHere  ; 
+
+Word: doAllot
+
+Doer doAllot 
+
+Word: Allot_
+
+:_ Allot_      
+     doAllot  ; 
+
+Word: do!
+
+Doer do! 
+
+Word: !_
+
+\ ANS sagt, dass ! auf Datenbereich wirkt, also zCode. 
+:_ !_          
+     do!  ; 
+
+Word: do@
+
+Doer do@ 
+
+Word: @_
+
+:_ @_           
+     do@  ; 
+
+Word: AllotRAM_
+
+\ In xCode wird alloziert nur bei RAM/ROM Trennung. 
+:_ AllotRAM_   
+     xAllot  ; 
+
+Word: TheCode_
+
+\ Im Target liefert theCode die korrekte AdresslÑnge. 
+:_ TheCode_   ( -- w›d )
+     TheCode ?>16  ; 
+
+Word: =Code_
+
+:_ =Code_   ( w›d -- )
+     ?>32 =Code  ; 
+
+Word: Literal_
+
+\ Immediate muss sein, damit z.B. in Macro: ein Literal eingefÅgt werden
+\ kann. 
+imm:_ Literal_   ( n›d -- )
+     ?>32 tLiteral  ; 
+
+Word: compile,_
+
+\ adr ablegen, ist Targetzelle = 16 oder 32 Bit. 
+:_ compile,_   ( adr -- )
+     ?>32 compile,  ; 
+
+Word: tc!_
+
+:_ tc!_  ( b adr -- )
+     ?>32 is zStart  1 is zBytes  zCode c!  zSendTarget  ; 
+
+Word: t!_
+
+\ Vom Host aus in das Target schreiben. Im Test- und Hostmodus. Braucht k
+\ nur den Monitor aber keinen Code im Target. 
+:_ t!_  ( n›d adr -- )
+     16?
+     if   0 is zStart  2 is zBytes  ?flip zCode !  
+     else is zStart  4 is zBytes ?flip zCode ! ?flip zCode !
+     then zSendTarget  ; 
+
+Word: tc@_
+
+\ [zReadCell liefert Byte bei adr als lo-byte.] 
+:_ tc@_  ( adr -- b )
+     ?>32 zReadCell split drop   ; 
+
+Word: t@_
+
+:_ t@_  ( adr -- n )
+     ?>32 zReadCell ?flip  ; 
+
+Group: Compiler
+
+Word: ]_
+
+:_ ]_
+     set State  ; 
+
+Word: [_
+
+imm:_ [_
+     clear State  ; 
+
+Word: Jump,
+
+Doer Jump, 
+
+Word: Jump,_
+
+:_ Jump,_
+     Jump,  true is Opcode?  ; 
+
+Word: JmpCode,_
+
+:_ JmpCode,_
+     TheCode Jump,_  ; 
+
+Word: Call,
+
+Doer Call, 
+
+Word: Call,_
+
+:_ Call,_
+     Call,  true is Opcode?  ; 
+
+Word: CallCode,_
+
+:_ CallCode,_
+     TheCode Call,_  ; 
+
+Word: ResetCode_
+
+:_ ResetCode_
+     0 is zBytes  ; 
+
+Word: Postpone_
+
+\ "postpone <immWort>" ist nur sinnvoll fÅr ein Hostwort, "postpone
+\ <normWort>" fÅr ein Targetwort. Beide FÑlle werden richtig gemanagt. 
+imm:_ Postpone_   ( word / -- )
+     true is postpone?  ; 
+
+Word: Program:_
+
+\ Entspricht dem Holon-Stil.  [ ' word =Program ist barbarisch...] 
+:_ Program:_   ( name / -- )
+     Code' is Appl  ; 
+
+Word: =Program_
+
+\ Drinlassen von wegen die alten Freunde... 
+:_ =Program_
+     ?>32 is Appl  ; 
+
+Group: MetaCompiler
+
+Der Metacompiler bildet den CompilerBaukasten. Alle Meta-Worte, die im
+Target zugÑnglich sind, haben ein trailing-underline Zeichen und mÅssen
+mit :_ etc. gebildet werden.
+Die Header der Metaworte werden als Meta-Vokabular in den zCode des
+Host gelegt. 
+
+Word: mCompile
+
+\ Startet Compilieren in Host, bildet JSR DoColon (von Host) mit Zeiger
+\ zu xCode (in Host) dahinter. Strukturtest mit 77. 
+: mCompile
+     CloseMCode  clear Target?  set State   
+     $E8 ( =jsr86 ) mc,z  doColon mzHere 2 + - m,z  
+     mxHereSeg m,z  77  ; 
+
+Word: Compiler:_
+
+:_ Compiler:_
+     SkipName_ !NoIntp_  ; 
+
+Word: Intp:_
+
+\ Alias zu Imm:. 
+:_ Intp:_
+     mzHere =Intp_ mCompile  ; 
+
+Word: Comp:_
+
+:_ Comp:_
+     mzHere =Comp_ mCompile  ; 
+
+Word: Code:_
+
+:_ Code:_   ( name / )
+     Code' =Code  ; 
+
+Word: ;_
+
+imm:_ ;_
+      77 ?mStructure doSemi m,x  clear State  set Target?  ;  \ 4.210 
+
+Word: Host:_
+
+\ Ein Colonwort in Meta bilden. Kann vom Target aus benutzt werden in
+\ Metacode. 
+:_ Host:_   ( name / )
+     SkipName_ ['] Intp,_ =Comp_ Intp:_  ; 
+
+Word: ,Name
+
+\ Name lesen, letztes Zeichen abschneiden, in zCode legen. 
+: ,Name   ( name / -- )
+     ParseWord  Word$ c@ 1- Word$ c!  upcase Word$
+     Word$ zCodeHere Word$ c@ 1+ dup +zBytes move  ; 
+
+Word: do,Header
+
+: do,Header
+     zHere is HeadLinkfeld 
+     32? if 0 ,z then 0 ,z              \ Headlink vorbereiten
+     reload?
+     if   zStart zEnd d<>               \ Wort wird umdefiniert
+          if   HeadLinkfeld 2dup        \ erste Laden, alter Ort
+               is OldLinkfeld
+               ?@z is OldLink           \ alter Link 
+          then
+     then ,Name  ; 
+
+Word: ,Header_
+
+:_ ,Header_
+     zBytes c,z  do,Header  ; 
+
+Word: ,Header&Imm_
+
+:_ ,Header&Imm_
+     zBytes $80 or c,z  do,Header  ; 
+
+Word: Immediate_
+
+\ Im alten Forth-Sinn, macht Imm- zu Compverhalten und setzt eine
+\ Fehlermeldung in Intp:. 
+:_ Immediate_
+     Aktivwort IntpFeld @s Aktivwort Compfeld !s  !NoIntp_  ; 
+
+Word: ClassCode
+
+\ Classfeld zeigt auf Klassen-Definition (Datenworte und MM-Tabelle). 
+: ClassCode   ( -- adr )
+     Compwort Classfeld @s  ; 
+
+Word: =Class
+
+\ Klasse von Unterwort definieren. 
+: =Class   ( adr -- )
+     Aktivwort Classfeld !s  ; 
+
+Word: Alias:_
+
+\ Alias bilden durch Kopieren der Codefelder des Wortes. Setzt Alias-Bit
+\ in Countbyte des Namens. 
+:_ Alias:_   ( name word / -- )
+     Skipname_ Code' =Code
+     IntpCode =Intp_ CompCode =Comp_ ClassCode =Class
+     Compwort Flagfeld @s Aktivwort Flagfeld !s
+     Aktivwort SetAlias  ; 
+
+Group: CodeWorte
+
+Word: Code_
+
+\ Beginnt die Definition eines Codewortes im Target. 
+:_ Code_
+     SkipName_ SetAssembler  ; 
+
+Word: Label_
+
+\ Um eine Adresse mit dem Label zu verbinden, muss Code folgen im Target,
+\ mindestens NOP. Label ohne Code ist undefiniert. 
+:_ Label_   ( name / )
+     Code_ ['] TheCode_ =Intp_ ['] TheCode, =Comp_  ;       \ 4.707 
+
+Word: wLabel_
+
+:_ wLabel_
+     Label_ 0 ,z  32? if 0 ,z then  ; 
+
+Word: nLabel_
+
+\ Codevariable mit Anfangswert n. [Label ruft Assembler und merkt sich
+\ Stack, da ein Element verbraucht wird, muss asp korrigiert werden.] 
+:_ nLabel_   ( name / w›d -- )
+     Label_ 32? if ,z ,z -2 else ,z -1 then +asp_ ; 
+
+Word: EQU_
+
+:_ EQU_   ( w›d -- )
+    Label_ =Code_ Assembler 32? if -2 else -1 then +asp_  ; 
+
+Word: Macro:_
+
+:_ Macro:_   ( name / -- )
+     SetAssembler Host:_     ['] a; m,x  ;        \ 4.712 
+
+Word: >Meta_
+
+\ In Metacode auf Meta schalten (fÅr Macros gedacht). 
+imm:_ >Meta_
+     clear Assembler?  Meta  ; 
+
+Word: >Assembler_
+
+\ In Metacode auf Assembler schalten, fÅr Macros. 
+imm:_ >Assembler_
+     set Assembler?  Assembler  ; 
+
+Group: Utilities
+
+ 
+
+Word: dup_
+
+:_ dup_
+     32? if 2dup else dup then  ; 
+
+Word: swap_
+
+:_ swap_       
+     32? if 2swap else swap then  ; 
+
+Word: over_
+
+:_ over_       
+     32? if 2over else over then  ; 
+
+Word: rot_
+
+:_ rot_        
+     32? if 2over 2>r 2over 2r> else rot then  ; 
+
+Word: drop_
+
+:_ drop_       
+     32? if 2drop else drop then  ; 
+
+Word: 2dup_
+
+16? ?load:    :_ 2dup_       2dup  ; 
+
+Word: 2swap_
+
+16? ?load:    :_ 2swap_      2swap  ; 
+
+Word: 2drop_
+
+16? ?load:    :_ 2drop_      2drop  ; 
+
+Word: +_
+
+:_ +_          
+     32? if d+ else + then  ; 
+
+Word: -_
+
+:_ -_          
+     32? if d- else - then  ; 
+
+Word: *_
+
+16? ?load:    :_ *_          *  ; 
+
+Word: /_
+
+16? ?load:    :_ /_          /  ; 
+
+Word: */_
+
+16? ?load:    :_ */_         */  ; 
+
+Word: 1+_
+
+16? ?load:    :_ 1+_         1+  ; 
+
+Word: 1-_
+
+16? ?load:    :_ 1-_         1-  ; 
+
+Word: */mod_
+
+16? ?load:    :_ */mod_      */mod  ; 
+
+Word: /mod_
+
+16? ?load:    :_ /mod_       /mod  ; 
+
+Word: 0<.
+
+16? ?load:    :_ 0<.         0<  ; 
+
+Word: 0=.
+
+:_ 0=.    
+     32? if d0= else 0= then  ; 
+
+Word: u<.
+
+:_ u<.  
+     32? if du< else u< then  ; 
+
+Word: u>.
+
+16? ?load:    :_ u>.         u>  ; 
+
+Word: =.
+
+:_ =.
+     32? if d= else = then  ; 
+
+Word: <>.
+
+:_ <>. 
+     32? if d<> else <> then  ; 
+
+Word: <.
+
+:_ <. 
+     32? if d< else < then  ; 
+
+Word: >.
+
+:_ >. 
+     32? if d> else > then  ; 
+
+Word: abs_
+
+:_ abs_  
+     32? if dabs else abs then  ; 
+
+Word: min_
+
+:_ min_  
+     32? if dmin else min then  ; 
+
+Word: max_
+
+:_ max_ 
+     32? if dmax else max then  ; 
+
+Word: and.
+
+16? ?load:    :_ and.        and  ; 
+
+Word: not.
+
+16? ?load:    :_ not.        not  ; 
+
+Word: xor.
+
+16? ?load:    :_ xor.        xor  ; 
+
+Word: or.
+
+16? ?load:    :_ or.         or  ; 
+
+Group: MetaStrukturen
+
+Die Strukturen fÅr Metacode mÅssen im alten Forth Stil gebaut werden
+als immediate Worte. Es geht kein Weg drum rum. Hoffentlich werden die
+Strukturen nicht nur vom Wort ENDCASE benutzt...
+
+Als Tag verwende ich 'm', da '_' bereits fÅr die Assembler-Strukturen
+in Gebrauch ist. 
+
+Word: m!x
+
+: m!x   ( n off -- )
+     mxHereSeg xSeg + swap !l  ; 
+
+Word: m>mark
+
+: m>mark   ( i -- i off )
+     mxHereOff 0 m,x  ; 
+
+Word: m<mark
+
+: m<mark   ( i -- i off )
+     mxHereOff  ; 
+
+Word: m>resolve
+
+: m>resolve   ( i1 off1 i2 -- )
+     rot ?mStructure mxHereOff over - swap m!x  ;           \ 4.210 
+
+Word: m<resolve
+
+: m<resolve   ( i1 off1 i2 -- )
+     rot ?mStructure mxHereOff - m,x  ;                     \ 4.210 
+
+Word: ?NoIntp
+
+\ Die imm:-Strukturworte dÅrfen nicht im Intp-Zustand ausgefÅhrt werden. 
+: ?NoIntp
+     intp? if NoIntpAction then  ; 
+
+Word: IFm
+
+imm:_ IFm
+     ?NoIntp ?branch m,x 2 m>mark  ; 
+
+Word: ELSEm
+
+imm:_ ELSEm
+     ?NoIntp branch m,x 2 m>mark 2swap 2 m>resolve  ; 
+
+Word: THENm
+
+imm:_ THENm
+     ?NoIntp 2 m>resolve  ; 
+
+Word: BEGINm
+
+imm:_ BEGINm
+     ?NoIntp 3 m<mark  ; 
+
+Word: AGAINm
+
+imm:_ AGAINm
+     ?NoIntp branch m,x 3 m<resolve  ; 
+
+Word: UNTILm
+
+imm:_ UNTILm
+      ?NoIntp ?branch m,x 3 m<resolve  ; 
+
+Word: WHILEm
+
+imm:_ WHILEm
+      ?NoIntp ?branch m,x 4 m>mark 2swap  ; 
+
+Word: REPEATm
+
+imm:_ REPEATm
+      ?NoIntp branch m,x 3 m<resolve 4 m>resolve  ; 
+
+Word: DOm
+
+imm:_ DOm
+      ?NoIntp <do> m,x 5 m>mark  ; 
+
+Word: LOOPm
+
+imm:_ LOOPm
+      ?NoIntp <loop> m,x  2dup 2 + 5 m<resolve  5 m>resolve  ; 
+
+Word: +LOOPm
+
+imm:_ +LOOPm
+      ?NoIntp <+loop> m,x  2dup 2 + 5 m<resolve  5 m>resolve  ; 
+
+Word: Im
+
+\ Callparameter von RStack holen und zurÅcksetzen. 
+:_ Im  
+     2r> I -rot 2>r  ; 
+
+Group: Objekte
+
+FÅr jede Klasse (Objekttyp) wird eine Tabelle angelegt im Host.
+
+› jmp docol xca › n › n Methoden › n Meldungen ›
+
+xca ist der Code, der den Datenbereich bildet. 
+n (16 Bit) = Anzahl der Methoden = Anzahl der Meldungen dieser Klasse.
+n liegt bei Offset 5.
+Die Methoden werden als 32 Bit xt abgelegt.
+Die Meldungen werden als 16 Bit Tokens abgelegt. 
+
+Word: GetMsg?
+
+\ Aus der Messageliste bei adr den Index fÅr die aktuelle Meldung lesen,
+\ und pruefen, ob die Meldung vorhanden ist bei diesem Typ. Wenn Msg=0
+\ ist, die erste Methode liefern (0), und Flag Objekt? = 1 setzen. Sonst
+\ Objekt?=-1 (wird in Steps benutzt). 
+: GetMsg?   ( adr n -- adr i true › adr false )
+     Msg# 
+     if   -1 is Objekt?                 \ Message vorhanden
+          times dup @ Msg# = 
+               if drop i true leave&exit then
+               2+
+          loop drop false  
+     else 2drop 0 true  1 is Objekt?    \ erste Message = default
+     then  ; 
+
+Word: GetMethod
+
+\ Holt die Methode zur aktuellen Message aus der Tabelle und lîscht die
+\ Msg#. Tabelle direkt ansprechen, nicht als Parameter uebergeben;
+\ Tabelle beginnt immer bei Classcode+5. 
+: GetMethod   ( -- xt )
+     ClassCode 5 +                      \ -- tabelle     
+     dup dup @ 4 * + 2+                 \ -- tabelle meldungen
+     over @                             \ -- tabelle meldungen n
+     GetMsg?                            \ -- tabelle i t › tabelle f
+     0 is Msg#                          \ sicher sein dass Msg# genullt
+     0= if " Sorry, wrong message" Loadmeldung then
+     4 * + 2+ 2@  ;                     \ xt der aktuellen Methode 
+
+Word: IntpObject
+
+\ Fuehrt xt(obj) aus. Holt Methode aus der Class-Tabelle und fÅhrt sie
+\ aus. Die Tabelle startet 5 Bytes hinter dem Classcode. 
+: IntpObject
+     TheCode tExecute  GetMethod tExecute  ; 
+
+Word: CompObject
+
+\ Compiliert Objekt und Methode. 
+: CompObject
+     TheCode Ablegen  GetMethod Ablegen  ; 
+
+Word: MakeObject
+
+\ Setzt Intp, Comp und Classfeld vom Objekt, das definiert wird, und
+\ bildet den Datenbereich. 
+: MakeObject
+     SkipName_
+     ['] IntpObject =Intp_  
+     ['] CompObject =Comp_
+     ClassCode =Class
+     clear State  set Target?  
+     CallCode,_ Classcode execute  ; 
+
+Word: DefineType_
+
+\ Bildet einen neuen ObjektTyp, Typcode <obj> wird im Target verbunden,
+\ setzt Intp und Compaktionen. 
+:_ DefineType_
+    Skipname_ TheCode =Code  ['] MakeObject =Intp_ !NoComp_  ; 
+
+Word: CompData_
+
+\ Compiliert die Datenworte und setzt Zeiger in Classfeld des Typs. 
+:_ CompData_
+     mzHere =Class mCompile  ; 
+
+Word: Byte,_
+
+\ Ein Byte ablegen in Datenbereich. 
+:_ Byte,_
+     do-c,  ; 
+
+Word: Integer,_
+
+\ 2 Bytes ablegen in Datenbereich. 
+:_ Integer,_
+     do,  ; 
+
+Word: Double,_
+
+\ 4 Bytes ablegen in Datenbereich. 
+:_ Double,_
+     do, do,  ; 
+
+Word: Bytes,_
+
+\ Reserviert u Datenbytes. 
+:_ Bytes,_   ( u -- )
+     doAllot  ; 
+
+Word: 0Bytes,_
+
+\ u Nullen ablegen in Datenbereich. 
+:_ 0Bytes,_   ( u -- )
+     0 ?do 0 do-c, loop  ; 
+
+Word: CompMethods_
+
+\ Schliesst den Intp-Code des OTyps ab und startet den Comp-Code. Der
+\ Comp-Code besteht nur aus der Fehlermeldung; im zCode wird aber die
+\ Tabelle der Methoden und Messages angehaengt. 
+:_ CompMethods_
+     77 ?mStructure                     \ Strukturtest           4.210
+     doSemi m,x                         \ Datenworte beenden
+     0 is #Methods                      \ Tabelle beginnen
+     0 m,z                              \ Platz fÅr Anzahl Methoden
+     set ObjType? set State set Target?  ; 
+
+Word: CompMessages_
+
+\ Methoden und Messages compilieren sich selbst in die Tabelle. Wir haben
+\ die Methoden gesammelt und kînnen nun die Anzahl festhalten. 
+:_ CompMessages_
+      #Methods AktivWort Classfeld @s 5 + !  ; 
+
+Word: PutMsg#
+
+\ In einem Messagewort enthÑlt TheCode die Nummer der Message. Legt die
+\ Nummer in Msg# oder beim Definieren des Typs in die Typtabelle. 
+: PutMsg#
+     TheCode drop ObjType? if m,z else is Msg# then  ; 
+
+Word: DefineMessage_
+
+\ Die Messages werden durch ihre Eintragnummer identifiziert. Definiert
+\ auch das Verhalten der Message. 
+:_ DefineMessage_
+     SkipName_  AktivWort 0 =Code  ['] PutMsg# dup =Intp_ =Comp_  ; 
+
+Word: DPL_
+
+\ Make DPL available in compiler. Used in float constants. 34u 
+:_ DPL_   
+     dpl  ; 
+
+Group: Verzîgerte Objekte
+
+Objekte mit verzîgerter AusfÅhrung (Intp oder Comp) sind nÅtzlich fÅr
+indizierte Variabeln und fÅr PrÑfix Operatoren (Assembler).
+Mechanismus: Das Objekt speichert obj und aktuelle Methode auf einem
+ObjStack. Ein spÑteres Wort verwendet dann die Objektparameter. Platz
+fÅr drei verschachtelte Objekte.
+Bsp. VECTOR( 2 ): Das Objekt VECTOR( speichert die Parameter, der
+Compiler ) verwendet dann die Parameter fÅr die Run- oder Compaktion. 
+
+Word: PushObject
+
+\ Speichert die Objektparameter. Objekt? und Cursor pushen. 
+: PushObject
+     GetMethod push ObjStack push ObjStack  
+     TheCode push ObjStack push ObjStack  
+     Debug?
+     if   Objekt? 0< if iStep 1- CurAdr @ push ObjStack then
+          DefCur push ObjStack  
+          Objekt? push ObjStack clear Objekt?
+     then  ; 
+
+Word: MakeArray
+
+\ Aktion von ArrayMutter, setzt Codefelder von Kind und bildet
+\ Datenbereich mit Classcode. 
+: MakeArray
+     Skipname_ ['] PushObject dup =Intp_ =Comp_
+     ClassCode =Class  clear State set Target?
+     CallCode,_  ClassCode execute  ; 
+
+Word: DefineArray_
+
+\ Bildet Arrayklasse. 
+:_ DefineArray_
+     Skipname_ TheCode =Code
+     ['] MakeArray =Intp_ !NoComp_  ; 
+
+Word: Pop&RunObject_
+
+\ FÅhrt ein verzîgertes Objekt aus. 
+:_ Pop&RunObject_
+     pop ObjStack pop ObjStack 3. d+ 
+     pop ObjStack pop ObjStack tExecute  ; 
+
+Word: Pop&CompObject_
+
+\ Compiliert ein verzîgertes Objekt. Objekt? und Cursor setzen. 
+:_ Pop&CompObject_
+     Debug?
+     if   pop ObjStack is Objekt? 
+          pop ObjStack is DefCur
+          Objekt? 0< if pop ObjStack iStep CurAdr ! 1 add iStep then
+     then 
+     pop ObjStack pop ObjStack compile,  
+     pop ObjStack pop ObjStack compile,  ; 
+
+Group: Text
+
+Word: Limit
+
+\ Aktueller Grenzwert fÅr Loops. 
+0 integer Limit 
+
+Word: "zAllot
+
+\ Fixiert Text in zCodefenster, Text liegt bei zCodeHere mit Countbyte
+\ voraus. Wird von ," gebraucht, nicht direkt im Target. 
+: "zAllot
+     zCodeHere c@ 1+ +zBytes  ; 
+
+Word: "AllotRAM_
+
+\ Fixiert Text in xCodefenster. Verwenden bei ROM/RAM Trennung. 
+:_ "AllotRAM_
+     xCodeHere c@ 1+ xAllot  ; 
+
+Word: "count_
+
+:_ "count_   ( -- n )
+     xCode c@  ; 
+
+Word: "Copy_
+
+\ Kopiert Text von xCode zu zCode hinter den bereits bestehenden Code.
+\ [Parse legt Text in zCode und xCode, aber nachher kann zCode
+\ Åberschrieben sein durch Runcodewort u.a. "Copy kopiert den ungestîrten
+\ Text von xCode an das Ende vom zcode.] 
+:_ "Copy_
+     xCode zCodeHere "count_ 1+ move  "count_ 1+ +zBytes  ; 
+
+Word: TextUntil
+
+\ Liefert die Anzahl Zeichen von >in bis zum ersten Zeichen c. 
+: TextUntil   ( c -- n )
+     >r  tib #tib + is Limit
+     0  tib >in +
+     begin     dup c@ r@ <>
+               over Limit <> and
+     while     1 1 d+
+     repeat  drop r>drop  ; 
+
+Word: Parse
+
+\ Text von DefCur (!) aus bis zu nÑchstem c aus dem Inputstream in z- und
+\ xCodefenster kopieren (aber Here nicht schieben). Textzeiger >in hinter
+\ Text schieben. 'Parse' wird so nur in Forth verwendet s. 34-17
+\ Der Text im xCode liegt meist richtig, falls er im Datenbereich
+\ gebraucht wird. Dagegen kann der Text in zCode noch durch ein RunWort
+\ u.a. Åberschrieben werden. s. "Copy_ . 
+: Parse   ( c -- )                                          \ 4.227
+     Def>Tib TextUntil >r  
+     r@ xCodeHere c!  tib >in + xCodeHere 1+ r@ move  
+     r@ zCodeHere c!  tib >in + zCodeHere 1+ r@ move  
+     r> 1+ add >in  ; 
+
+Word: Parse_
+
+:_ Parse_   ( c -- )                                        \ 4.227
+     32? if drop then Parse  ; 
+
+Word: ,"_
+
+\ Legt Text bis " fest in zCode (schiebt zHere dahinter). Bei FPC muss
+\ vorher noch ein Zeiger in zCode abgelegt werden ( zHere ,x ). 
+:_ ,"_
+     [char] " Parse "zAllot  ;                              \ 4.227 
+
+Word: StoreText_
+
+\ Den restlichen Text im Defbuffer in das zCodeFenster kopieren und zuvor
+\ die LÑnge des Textes ablegen als 16 Bit Zahl. 
+:_ StoreText_
+     >in is DefCur  DefLÑnge DefCur - dup>r ,z
+     DefBuf DefCur + zCodeHere r@ move
+     r> +zBytes  ; 
+
+Word: zBytes0
+
+\ Bereits vorhandene Bytes in zCode sollen nicht Åberschrieben werden.
+\ Werden bei jedem Schreiben des Wortes in den Targetspeicher mit
+\ kopiert. 
+0 integer zBytes0 
+
+Word: >Target
+
+\ zCode in Targetspeicher legen bei zOffset. 
+: >Target   ( -- adr )
+     zEnd zOffset 0 d+ is zStart
+     try zSendTarget
+     zBytes add zOffset  zBytes0 is zBytes  
+     zStart zBytes0 0 d+ ?>16  zEnd is zStart  ; 
+
+Word: ">Target_
+
+\ Geparsten Text sofort an Target senden, fÅr Verarbeiten mit Targetwort
+\ w. Interpretieren. 
+:_ ">Target_   ( -- adr )
+     "count_ 1+ is zBytes  >Target  ; 
+
+Word: GetText_
+
+\ Text bis " aus dem Text holen und in den Targetspeicher legen. 
+\ Wort ist nur sinnvoll, beim LadenMitTarget. 
+:_ GetText_   ( c -- adr )
+     ascii " Parse LoadOhneTarget? if 0 else ">Target_ then  ; \ 4.227 
+
+Word: GetWord_
+
+\ Holt das folgende Wort aus dem Interpretertext, legt es in den
+\ Targetspeicher und die Adresse auf den Stack. Nutzt das zCodefenster
+\ ohne den vorhandenen Code zu stîren. 
+:_ GetWord_   ( -- adr )
+     zBytes is zBytes0
+     ParseWord 
+     Word$ c@ 1+ dup>r add zBytes
+     Word$ zCode zBytes0 + r> move
+     >Target  ; 
+
+Group: Char&Skip&Load
+
+Word: FirstChar_
+
+:_ FirstChar_
+     ParseWord Word$ 1+ c@ 32? if 0 then  ;                 \ 4.209 
+
+Word: Ascii_
+
+imm:_ Ascii_  ( word / -- )
+     FirstChar_ 32? if 2mLiteral else mliteral then  ;      \ 4.209 
+
+Word: SkipEOL_
+
+\ 5bb Zeiger zwei retour, dann erfasst +cr sicher das Zeilenende.
+\ Zeiger bis Ende Zeile schieben (erfasst auch weiches cr). FÅr '\' .
+\ Nach Parsen von \ zeigt >in Hinter das 'Leerzeichen' (Space oder cr). 
+:_ SkipEOL_
+      >in 2- is cur +cr 1+ is >in  ; 
+
+Word: \_
+
+imm:_ \_          
+     SkipEOL_  ; 
+
+Word: Skip)_
+
+:_ Skip)_
+     begin     >in DefLÑnge 2- >
+               if " ')' not found" LoadMeldung then
+               DefBuf >in + c@  [char] ) <>  
+     while     1 add >in
+     repeat 1 add >in  ; 
+
+Word: (_
+
+\ Schiebt >in Åber Text bis zu nÑchstem ), Fehler wenn nicht vorhanden. 
+imm:_ (_
+     skip)_  ; 
+
+Word: EndDef_
+
+:_ EndDef_
+     DefLÑnge is >in  ; 
+
+Word: Text:_
+
+:_ Text:_   ( name / )
+      EndDef_  ; 
+
+Word: StopLoading_
+
+\ Beendet alle Laderoutinen. 
+:_ StopLoading_
+     EndTry  ; 
+
+Word: ?Profi
+
+\ Testen auf Profiversion. 
+: ?Profi                                                    \ 4.220
+     Profi? 0= 
+     if   " is available in the registered developer version."
+          NameMeldung 
+     then  ; 
+
+Word: ?Load:_
+
+\ LÑdt Definition, wenn f true. In Profiversion. 
+:_ ?Load:_   ( f -- )
+     ?Profi                                                 \ 4.220
+     0= if EndDef_ then  ; 
+
+Word: InFile
+
+\ Auch als allgemeines Handle verwenden. 
+0 integer InFile 
+
+Word: FilelÑnge
+
+\ Kann auch allg. verwendet werden. 
+0 integer FilelÑnge 
+
+Word: ixy
+
+\ Speichert Cursorposition. 
+0.0 Double ixy 
+
+Word: d.i#
+
+\ Zahl d in hex an Position ixy schreiben. 
+: d.i#   ( d -- )
+     ixy xy thebase -rot hex d.#### is theBase  ; 
+
+Word: InsertFile
+
+\ Fileinhalt in Codefile und Target ab Adresse zStart einfÅgen. 
+: InsertFile   
+     @xy is ixy
+     InFile FileLength drop is FileLÑnge  InFile FileReset
+     begin     zStart d.i#
+               FilelÑnge 0 $400 0 dmin drop dup is zBytes
+     while     cs: zCode zBytes InFile read drop  zSend 
+               zBytes 0 add zStart FilelÑnge zBytes - is FilelÑnge
+               esc? ?exit
+     repeat  ; 
+
+Word: InsertFile"_
+
+\ Legt Inhalt von File name in zCode ab adr. - Name in Meta bilden, daher
+\ prefix nicht mîglich. Meldung wieder lîschen. 
+:_ InsertFile"_   ( name / adr -- )
+     ?Profi                                                 \ 4.220
+     ?>32 is zStart
+     ascii " Parse xCode open-r dup 0=                      \ 4.227
+     if   " Sorry, insert file not found" LoadMeldung then
+     is InFile  
+     zLimit InFile FileLength d- zStart d< 
+     if   " Sorry, insufficient space for inserting" LoadMeldung then
+     " Inserting file in targetcode. - adr:" Meldung InsertFile
+     InFile close drop .Comment  ; 
+
+Word: Target>File
+
+\ Das Lesen des Target-RAMs ist Target- und MonitorabhÑngig. 
+Doer Target>File 
+
+Word: StoreFile"_
+
+\ Kopiert u Bytes ab adr im Target-RAM in das File "name". Bildet das
+\ File neu oder ersetzt ein bestehendes File. 
+:_ StoreFile"_   ( name" / adr u -- )
+     ?Profi                                                 \ 4.220
+     Monitor? 0= if " Sorry, target is offline" LoadMeldung then
+     " Saving RAM data to file. - adr: " Meldung  
+     ascii " Parse xCode mkfile is inFile  \ -- adr u --    \ 4.227
+     Target>File  inFile close drop .Comment  ; 
+

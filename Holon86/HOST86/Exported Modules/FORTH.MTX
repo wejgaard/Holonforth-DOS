@@ -1,0 +1,2527 @@
+Module: Forth
+
+Group: DataStack
+
+Word: TheDatastack
+
+Text: TheDatastack
+   The data stack is responsible for the inherent simplicity of Forth.
+The stack solves the problem of parameter transfer in the simplest
+possible way. It presents a local scope for parameters, simplifies
+parsing of arithmetic expressions through reverse polish notation,
+allows recursion and facilitates simple implementations of
+multitasking. 
+
+Word: StackNotation
+
+Text: StackNotation
+   Every word that uses the stack ought to indicate the number and type
+of parameters that it consumes and delivers. In Holon we use the
+notation ( in -- out ), with the top of stack (TOS) at the right-most
+position both in the 'in' and 'out' part. 
+
+Word: StackTypes
+
+Text: StackTypes
+   b       Byte (8bit, but occupies full 16bit cell)                  
+   c       Character (8bit, do.), 
+   n       Signed number (15bit+sign),           
+   u       Unsigned number (16bit), 
+   adr     Memory address (16bit),        
+   seg off Extended memory address (2*16bit)
+   "adr    Text (string) address (adr), 
+   x       Unspecified single cell entry (16 bits),
+   d       Double number (two stack cells, 32bit), 
+   ud      Unsigned double number (32bit), 
+
+Word: sp0
+
+\ Basis of data stack (defined in system area). 
+Code sp0   ( -- adr )
+     mov ax, # SPbase  1push 
+
+Word: sp@
+
+\ Current data stack pointer. 
+Code sp@    ( -- adr )
+     mov ax, sp   1push 
+
+Word: sp!
+
+\ Sets stackpointer to u. 
+Code sp!   ( adr -- )
+     pop sp   next 
+
+Word: !sp
+
+\ Resets (clears) data stack. 
+Code !sp
+     mov sp, # SPbase  next 
+
+Word: depth
+
+\ Number of items on data stack. 
+Code depth   ( -- n )
+     mov ax, # SPBase  sub ax, sp  sar ax, # 1  1push 
+
+Word: drop
+
+\ Removes x from the stack. 
+Code drop   ( x -- )
+     add sp, # 2   next 
+
+Word: swap
+
+\ Exchanges first and second entry. 
+Code swap   ( x1 x2 -- x2 x1 )
+     pop dx  pop ax  2push 
+
+Word: dup
+
+\ Duplicates x. 
+Code dup   ( x -- x x )
+     mov di, sp   push ss: 0 [di]   next 
+
+Word: over
+
+\ Places a copy of x1 on top of the stack. 
+Code over   ( x1 x2 -- x1 x2 x1 )
+     mov di, sp   push ss: 2 [di]   next 
+
+Word: 3rd
+
+\ Places a copy of x1 on top of the stack. 
+Code 3rd   ( x1 x2 x3 -- x1 x2 x3 x1 )
+     mov di, sp   push ss: 4 [di]   next 
+
+Word: +2nd
+
+\ Adds n to second entry (second disregarding n), n3=n1+n
+\ (replaces  rot + swap, useful for summing while looping). 
+Code +2nd   ( n2 n1 n -- n3 n1 )
+     pop ax  mov di, sp  add ss: 2 [di], ax  next 
+
+Word: tuck
+
+\ 'Tucks' a copy of x2 below x1. 
+Code tuck   ( x1 x2 -- x2 x1 x2 )
+     pop ax   pop dx   push ax   2push 
+
+Word: nip
+
+\ Drops x1. 
+Code nip   ( x1 x2 -- x2 )
+     pop ax   add sp, # 2   1push 
+
+Word: pick
+
+\ Picks a copy of the k-th item (0 pick = dup, 1 pick = over) 
+Code pick   ( xm .. x1 x0 k  --  xm .. x1 x0 xk )
+     pop di   shl di, # 1   add di, sp   push ss: 0 [di]
+     next 
+
+Word: rot
+
+\ Rotates the top three stack entries, third on top. 
+Code rot   ( x1 x2 x3 -- x2 x3 x1 )
+     pop dx   pop bx   pop ax   push bx   2push 
+
+Word: -rot
+
+\ Rotates first below third. 
+Code -rot   ( x1 x2 x3 -- x3 x1 x2 )
+     pop bx   pop ax   pop dx   push bx   2push 
+
+Word: ?dup
+
+\ Duplicates x if it is non-zero. 
+Code ?dup   ( x -- 0 | x x )
+     mov di, sp   
+     mov cx, ss: 0 [di]   
+     cx<>0 if push cx then   
+     next 
+
+Word: flip
+
+\ Exchanges low and high byte. 
+Code flip   ( x1 -- x2 )
+     pop ax   
+     xchg al, ah   
+     1push 
+
+Word: split
+
+\ Splits x into hi and lo byte. 
+Code split   ( x -- lo hi )
+     pop bx   sub ax, ax   mov al, bl   push ax   
+     mov al, bh   1push 
+
+Word: join
+
+\ Joins hi and lo to build x. 
+Code join   ( lo hi -- x )
+     pop dx   pop ax   mov ah, dl   1push 
+
+Word: 2drop
+
+\ Drops pair x1 x2 from stack. 
+Code 2drop   ( x1 x2 -- )
+     add sp, # 4  next 
+
+Word: 2dup
+
+\ Duplicates pair x1 x2. 
+Code 2dup   ( x1 x2 -- x1 x2  x1 x2 )
+     mov di, sp   push ss: 2 [di]   push ss: 0 [di]   next 
+
+Word: 2swap
+
+\ Exchanges top two pairs. 
+Code 2swap   ( x1 x2  x3 x4 -- x3 x4  x1 x2 )
+     pop cx pop bx  pop ax  pop dx  push bx  push cx  2push 
+
+Word: 2over
+
+\ Copies pair x1 x2 to the top of the stack. 
+Code 2over   ( x1 x2  x3 x4 -- x1 x2  x3 x4  x1 x2 )
+    mov di, sp  push ss: 6 [di]  push ss: 4 [di]  next 
+
+Word: 3dup
+
+\ Duplicates the upper three entries x1 x2 x3. 
+Code 3dup   ( x1 x2 x3 -- x1 x2 x3  x1 x2 x3 )
+     mov di, sp   
+     push ss: 4 [di]   push ss: 2 [di]   push ss: 0 [di]   
+     next 
+
+Word: 3drop
+
+\ Drops the top three entries on the stack. 
+Code 3drop   ( n1 n2 n3 -- )
+     add sp, # 6  next 
+
+Group: ReturnStack
+
+Word: TheReturnstack
+
+Text: TheReturnstack
+   The return stack is used for storing instruction pointers while
+execution is transferred to a subword. Inside a word the return stack
+can also be used to store program data, but care must be taken to
+remove all data again before the word is ended. Changing the return
+stack is a sure way to crash the system. 
+   The return stack is also used to store loop indices for DO ..LOOP's. 
+
+Word: rp0
+
+\ Basis of return stack (defined in system area). 
+Code rp0   ( -- u )
+     mov ax, # RPBase  1push 
+
+Word: rp@
+
+\ Delivers current return stack pointer (offset in stack segment). 
+Code rp@   ( -- u )
+     push bp   next 
+
+Word: rp!
+
+\ Sets the return stack pointer to offset u. 
+Code rp!   ( u -- )
+     pop bp   next 
+
+Word: r>
+
+\ Moves top item of return stack to data stack. 
+Code r>   ( -- x )
+     push 0 [bp]   add bp, # 2   next 
+
+Word: >r
+
+\ Moves x to the return stack. 
+Code >r   ( x -- )
+     sub bp, # 2   pop 0 [bp]   next 
+
+Word: r@
+
+\ Fetches a copy of the top of return stack. 
+Code r@   ( -- x )
+     push 0 [bp]  next 
+
+Word: r>drop
+
+\ Drops top of return stack. 
+Code r>drop
+     add bp, # 2  next 
+
+Word: dup>r
+
+\ Pushes a copy of tos on return stack. 
+Code dup>r   ( x -- x )
+     xchg sp, bp   push 0 [bp]   xchg sp, bp   next 
+
+Word: rpick
+
+\ Copies i-th {0,..} item from RStack to DStack. 
+Code rpick   ( i -- x )
+     pop di   shl di, # 1   push 0 [bp+di]   next 
+
+Word: 2>r
+
+\ Transfers pair x1 x2 to the return stack. 
+Code 2>r   ( x1 x2 -- )
+     sub bp, # 4   pop 0 [bp]  pop 2 [bp]  next 
+
+Word: 2r@
+
+\ Copies pair x1 x2 from the return stack. 
+Code 2r@   ( -- x1 x2 )
+     push 2 [bp]  push 0 [bp]   next 
+
+Word: 2r>
+
+\ Transfers pair x1 x2 from the return stack. 
+Code 2r>   ( -- x1 x2 )
+     push 2 [bp]  push 0 [bp]  add bp, # 4  next 
+
+Group: Memory
+
+Word: TheMemory
+
+Text: TheMemory
+   The standard memory words @, ! etc. work on addresses in the
+datasegment DS: (normally equal to the codesegment CS:). The words with
+suffix 'L' operate on extended addresses (seg:off).
+   Colon words are stored in memory above the codesegment. During
+execution of a colon word, the extra segment ES: points to the list
+code of the word (the list code starts at ES:0) 
+
+Word: @
+
+\ Fetches the contents of address adr (in datasegment=codesegment). 
+Code @   ( adr -- x )
+     pop bx   push 0 [bx]   next 
+
+Word: !
+
+\ Stores x into memory address adr. 
+Code !   ( x adr -- )
+     pop bx   pop 0 [bx]   next 
+
+Word: +!
+
+\ Adds n to the contents of adr. 
+Code +!   ( n adr -- )
+     2pop   add 0 [bx], ax   next 
+
+Word: c@
+
+\ Fetches the byte from memory at adr. 
+Code c@   ( adr -- b )
+     pop bx   sub ax, ax   mov al, 0 [bx]   1push 
+
+Word: c!
+
+\ Stores byte b into memory at adr. 
+Code c!   ( b adr -- )
+     2pop   mov 0 [bx], al   next 
+
+Word: +c!
+
+\ Adds b to byte at adr. 
+Code +c!   ( b adr -- )
+     2pop   add 0 [bx], al   next 
+
+Word: cSet
+
+\ 'Or's bits at adr with b. 
+Code cSet   ( b adr -- )
+     2pop   or 0 [bx], al   next 
+
+Word: cReset
+
+\ Clears bits at adr corresponding to '1'-bits in b. 
+Code cReset   ( b adr -- )
+     2pop  not ax   and 0 [bx], al   next 
+
+Word: 0!
+
+\ Clears all 16 bits at memory address adr. 
+Code 0!   ( adr -- )
+     pop bx   mov 0 [bx], # 0 word  next 
+
+Word: -1!
+
+\ Sets all bits at memory address adr. 
+Code -1!   ( adr -- )
+     pop bx   mov 0 [bx], # -1 word  next 
+
+Word: decr
+
+\ Decrements contents of adr by one. 
+Code decr   ( adr -- )
+     pop bx   dec 0 [bx] word    next 
+
+Word: incr
+
+\ Increments contents of adr by one. 
+Code incr   ( adr -- )
+     pop bx   inc 0 [bx] word    next 
+
+Word: cs:
+
+\ Delivers current codesegment. 
+Code cs:   ( -- seg )
+     push cs  next 
+
+Word: ds:
+
+\ Delivers current datasegment. 
+Code ds:   ( -- seg )
+     push ds  next 
+
+Word: ss:
+
+\ Stacksegment. 
+Code ss:   ( -- seg )
+     push ss  next 
+
+Word: es:
+
+\ Extra segment. 
+Code es:   ( -- seg )
+     push es  next 
+
+Word: @l
+
+\ Fetches contents of absolute address seg:off. 
+Code @l   ( seg off -- x )
+     pop bx  pop ds  mov ax, 0 [bx]  mov bx, cs  mov ds, bx
+     1push 
+
+Word: c@l
+
+\ Fetches byte at seg:off. 
+Code c@l   ( seg off -- b )
+     pop bx  pop ds  mov al, 0 [bx]  xor ah, ah 
+     mov bx, cs  mov ds, bx  1push 
+
+Word: c!l
+
+\ Stores byte b into seg:off. 
+Code c!l   ( b seg off -- )
+     pop bx  pop ds  pop ax  mov 0 [bx], al  
+     mov bx, cs  mov ds, bx  next 
+
+Word: !l
+
+\ Stores x into seg:off. 
+Code !l   ( x seg off -- )
+     pop bx  pop ds  pop ax  mov 0 [bx], ax
+     mov bx, cs  mov ds, bx  next 
+
+Word: +!l
+
+\ Adds x to data at seg:off. 
+Code +!l   ( x seg off -- )
+     pop bx  pop ds  pop ax  add 0 [bx], ax
+     mov bx, cs  mov ds, bx  next 
+
+Word: 2@
+
+\ Fetches the pair x1 x2 stored at adr, x1 is stored at adr+2 and x2 at
+\ adr. 
+Code 2@   ( adr -- x1 x2 )
+     pop bx  push 2 [bx]  push 0 [bx]  next 
+
+Word: 2!
+
+\ Stores the pair x1 x2 at adr, with x1 at adr+2 and x2 at adr. 
+Code 2!   ( x1 x2 adr -- )
+     pop bx  pop 0 [bx]  pop 2 [bx]  next 
+
+Word: 2@l
+
+\ Fetches the pair x1 x2 at absolute address seg:off. 
+Code 2@l   ( seg off -- x1 x2 )
+     pop bx  pop ds  push 2 [bx]  push 0 [bx]
+     mov bx, cs  mov ds, bx  next 
+
+Word: 2!l
+
+\ Stores the pair x1 x2 at seg:off. 
+Code 2!l   ( x1 x2 seg off -- )
+     pop bx  pop ds  pop 0 [bx]  pop 2 [bx]
+     mov bx, cs  mov ds, bx  next 
+
+Word: d+!
+
+\ Adds double number d to double number at adr. 
+Code d+!   ( d adr -- )
+     pop bx  pop ax  pop dx  add 2 [bx], dx  adc 0 [bx], ax
+     next 
+
+Word: p@
+
+\ Reads byte at i/o-address adr. 
+Code p@   ( adr -- b )
+     pop dx   in al, dx   sub ah, ah   1push 
+
+Word: pw@
+
+\ Reads x at i/o-adr. 
+Code pw@   ( adr -- x )
+     pop dx   in ax, dx   1push 
+
+Word: p!
+
+\ Writes byte b to i/o-adr. 
+Code p!   ( b adr -- )
+     pop dx   pop ax   out dx, al   next 
+
+Word: pw!
+
+\ Writes x to i/o-adr. 
+Code pw!   ( x adr -- )
+     pop dx   pop ax   out dx, ax   next 
+
+Word: move
+
+\ Copies the u bytes at adr1 to the u bytes at adr2. 
+Code move   ( adr1 adr2 u -- )
+     mov bx, si   mov dx, es     mov ax, ds   mov es, ax   
+     pop cx   pop di   pop si
+     cmp di, si 0<
+     if   cld   rep  movsb
+     else dec cx   add di, cx   add si, cx   inc cx
+          std   rep  movsb   cld
+     then
+     mov si, bx   mov es, dx   next 
+
+Word: movel
+
+\ Move u bytes from seg1:off1 to seg2:off2. 
+Code movel   ( seg1 off1 seg2 off2 u -- )
+     mov bx, si   mov dx, es
+     pop cx  pop di  pop es  pop si  pop ds
+     cmp di, si 0<
+     if   cld   rep  movsb
+     else dec cx   add di, cx   add si, cx   inc cx
+          std   rep  movsb   cld
+     then
+     mov ax, cs   mov ds, ax        
+     mov es, dx   mov si, bx   next 
+
+Word: (fill)
+
+\ Stores the content of AH in u consecutive bytes of memory beginning at
+\ adr. 
+Label (fill)   ( adr u -- )
+     pop cx  pop di
+     push es  mov bx, ds  mov es, bx   
+     cld   rep  stosb   pop es  next 
+
+Word: fill
+
+\ Stores char c in each of u consecutive bytes of memory beginning at
+\ adr. 
+Code fill   ( adr u c -- )
+     pop ax  jmp (fill) 
+
+Word: erase
+
+\ Stores zero in each of u consecutive bytes of memory beginning at adr. 
+Code erase   ( adr u -- )
+     sub ax, ax  jmp (fill) 
+
+Word: blank
+
+\ Stores a space character in each of u consecutive bytes of memory
+\ beginning at adr. 
+Code blank   ( adr u -- )
+     mov ax, # 32  jmp (fill) 
+
+Word: filll
+
+\ Stores char c in each of u consecutive bytes of memory beginning at
+\ seg:off. 
+Code filll   ( seg off u c -- )
+     pop ax  pop cx  pop di  pop dx
+     push es   mov es, dx   
+     cld   rep  stosb   pop es  next 
+
+Word: count
+
+\ Returns the string specification for the counted string stored at adr1.
+\ adr2 is the address of the first character, u is the length of the
+\ string. 
+Code count   ( adr1 -- adr2 u )
+     pop bx  mov al, 0 [bx]  sub ah, ah   
+     inc bx  push bx  1push  next 
+
+Word: countl
+
+\ Reads byte at seg:off and increments offset. 
+Code countl   ( seg off -- seg off+1 n )
+     pop bx  pop ds   mov al, 0 [bx]   sub ah, ah   
+     inc bx  push ds  push bx   mov bx, cs   mov ds, bx
+     1push 
+
+Group: RunCode
+
+The data words and the control flow words of Forth use run-words that
+are collected in this group. The run-words are used by the compiler to
+build the desired data element or structure.
+
+Run-words are used by custom compilers. Therefore run-words are not
+code words but code pieces defined with labels. 
+
+Word: doNext
+
+\ Next as run code, inserted by compiling words. 67n 
+Label doNext
+     lodsw es:  jmp ax 
+
+Word: doColon
+
+\ Starts a colon word, pushes IP (=ES:SI) on the return stack. 
+Label doColon
+     sub bp, # 4  mov 2 [bp], es  mov 0 [bp], si 
+     pop di  mov ax, >xSeg  add ax, 0 [di]  mov es, ax   
+     sub si, si   next
+     =DebugDocol                        \ tell the debugger 
+
+Word: doSemi
+
+\ Ends a colon word: fetches the IP of the calling word from the return
+\ stack. 
+Label doSemi                                
+     mov si, 0 [bp]  mov es, 2 [bp]  add bp, # 4   
+     next 
+
+Word: doCon
+
+\ Run code for CONSTANT. 
+Label doCon
+     mov bx, ax   push 3 [bx]   next 
+
+Word: doVar
+
+\ Run code for variable, identical to doNext. If it is called as a
+\ subroutine, the calling address is put on the stack. 67n 
+Label doVar
+     lodsw es:  jmp ax 
+
+Word: doDoes
+
+\ Run code for DOES>. 
+Label doDoes   ( child/data  parent/does-part -- )
+     sub bp, # 4  mov 2 [bp], es  mov 0 [bp], si  
+     pop di  mov ax, >xSeg  add ax, 0 [di]
+     mov es, ax  sub si, si   next
+     =DebugDodoes 
+
+Word: doDoer
+
+\ Run code for execution vectors DOER. 
+Label doDoer
+     pop bx  mov ax, 0 [bx]  jmp ax
+     =DebugDoit                         \ informs the debugger 
+
+Word: doMake
+
+\ Run code for Make. 34-14 
+Label doMake
+     lodsw es:  mov bx, ax  lodsw es:  mov 0 [bx], ax  next 
+
+Word: Next(ip)
+
+\ Puts [IP] into IP, i.e. jumps to the contents of IP. 
+Label Next(ip)
+     cmp Brk? # 0  0= 
+     if   add es: si, 0 [si]   next 
+     else mov Brk? # 0 word             \ clear flag
+          sub ax, ax  int $16           \ get key (clear buffer)
+          jmp doSemi                    \ exit current word
+     then 
+
+Word: branch
+
+\ Unconditional jump to [IP]. 
+Label branch
+     jmp next(ip) 
+
+Word: ?branch
+
+\ Jumps to [IP] if flag is false. 
+Label ?branch   ( f -- )
+     pop cx  cx<>0 if  add si, # 2  next  then
+     jmp next(ip) 
+
+Word: <loop>
+
+\ Run code for LOOP. 
+Label <loop>
+     inc 0 [bp] word    ov<> if jmp next(ip) then
+     add bp, # 6  add si, # 2  next 
+
+Word: <+loop>
+
+Label <+loop>   ( n -- )
+     pop ax   add 0 [bp], ax   ov<> if jmp next(ip) then
+     add bp, # 6  add si, # 2  next 
+
+Word: <do>
+
+Label <do>   ( n1 n2 -- )
+     pop dx  pop bx  
+     xchg bp, sp  
+     push si  lodsw es: 
+     add bx, # $8000   push bx  
+     sub dx, bx  push dx  xchg bp, sp  
+     next 
+
+Word: <?do>
+
+Label <?do>   ( n1 n2 -- )
+     pop dx  pop bx  cmp bx, dx  = if jmp next(ip) then
+     xchg bp, sp  
+     push si  lodsw es:  
+     add bx, # $8000   push bx
+     sub dx, bx  push dx  xchg bp, sp   
+     next 
+
+Word: <of>
+
+\ Run code for OF, to be used in CASE OF ENDOF ENDCASE. 
+Label <of>   ( n1 n2 -- n1   or   n1 n1 -- )
+     pop ax  mov di, sp
+     cmp ax, ss: 0 [di]  0<> if jmp next(ip) then
+     add sp, # 2  add si, # 2  next 
+
+Word: "match?
+
+\ Compares strings "adr1 and "adr2. AX=-1, if strings are equal, else =0. 
+Label "match?   ( "adr1 "adr2 -- "adr1 )
+     xchg sp, bp  cld   mov bx, si   mov dx, es
+     pop si  sub ax, ax  lodsb             ( ax=count2)
+     mov cx, si  mov di, cx  mov cx, ds  mov es, cx
+     mov cx, ax  ( count2)  pop si  push si  lodsb 
+     cmp cx, ax  <> 
+     if   sub ax, ax
+     else or cx, cx  0<>
+          if   repz cmpsb 0<> 
+               if mov ax, # 0 else mov ax, # -1 then
+          else mov ax, # -1     
+     then then mov si, bx  mov es, dx  
+     xchg sp, bp  ret 
+
+Word: <"of>
+
+\ Run code for "OF, jumps behind ENDOF and leaves $adr1 if no match, else
+\ continues behind "OF with empty stack. 
+Label <"of>   ( "adr1 "adr2 -- "adr1 or nil )
+     xchg sp, bp  call "match?  xchg sp, bp  
+     cmp ax, # 0  0= if jmp next(ip) then
+     add sp, # 2  add si, # 2  next 
+
+Group: Compiler
+
+Holon implements a new cross-compiler concept that defines every Forth
+compiling word in the target program. 
+Every word in Holon does its own compiling action. According to the
+value of STATE it performs the intp:- or comp:-code. The host provides
+a set of meta-words that allow us to define these intp: and comp:
+actions. 
+
+Word: :
+
+\ Defines the definer word : (colon). '77' is a compiler security check,
+\ which is later resolved by ';' 
+Compiler: :
+    Intp: SkipName CallCode, ListSeg , ] 77 ;
+    Comp: NoComp ;
+    Code: doColon 
+
+Word: ;
+
+\ Defines the compiler word ;  which ends the definition of a colon word. 
+Compiler: ;
+    Intp: NoIntp ;
+    Comp: 77 ?structure Code, postpone [ ;     
+    Code: doSemi 
+
+Word: Create
+
+\ Intp-mode: Defines the word <name>. Name delivers the address of the
+\ current code address. Comp-mode: Compiles the run-time action of the
+\ currently compiled word. 
+Compiler: Create
+    Intp: SkipName CallCode, ;      ( name / -- )
+    Comp: Intp: intp, ;
+    Code: doVar 
+
+Word: >body
+
+\ adr is the data field address corresponding to xt. An ambigous
+\ condition exists if xt is not for a word defined via CREATE. 
+Label >body   ( xt -- adr )
+     pop ax  add ax, # 3 word  1push 
+
+Word: Does>
+
+\ Compiles the action of a child word that is later defined by the
+\ presently compiled word. 
+Compiler: Does>
+    Intp: NoIntp ;
+    Comp: postpone ; ResetCode CallCode, ListSeg , ] ;
+    Code: doDoes 
+
+Word: Doer
+
+\ Creates an execution vector name, initialized to doNext (i.e. to do
+\ nothing). 
+Compiler: Doer   ( name / -- )
+    Intp: SkipName CallCode, doNext , ;
+    Comp: NoComp ;
+    Code: doDoer 
+
+Word: Make
+
+\ Makes execution vector doer perform action. 34-14 
+Compiler: Make   ( doer action / -- )
+    Intp: ' 3 +  ' swap ! ;
+    Comp: Code, ' 3 + compile, ' compile, ;
+    Code: doMake 
+
+Word: Char
+
+\ Delivers ascii code of first char of name. 
+Compiler: Char   ( name / -- c )
+    Intp: FirstChar ;
+    Comp: NoComp ; 
+
+Word: [char]
+
+\ Compiles ascii code of first char of name as a literal. 
+Compiler: [char]   ( name / -- )
+    Intp: NoIntp ;
+    Comp: Code, FirstChar compile, ;
+    Code: doLiteral 
+
+Word: Ascii
+
+\ Alias for CHAR and [CHAR], state-smart, not ANS Forth but convenient. 
+Compiler: Ascii
+    Intp: FirstChar ;
+    Comp: Code, FirstChar compile, ;
+    Code: doLiteral 
+
+Word: (
+
+\ Skips text including the following ). 
+Compiler: (
+    Intp: Skip) ;
+    Comp: Skip) ; 
+
+Word: \
+
+\ Skips text until next line. 
+Compiler: \
+    Intp: SkipEOL ;
+    Comp: SkipEOL ; 
+
+Word: ]
+
+\ Switches to compiling mode. 
+Compiler: ]
+    Intp: ] ;
+    comp: ; 
+
+Word: [
+
+\ Switches to interpreter mode. No action in interpreter mode. 
+Compiler: [
+    Intp: ;
+    comp: postpone [ ; 
+
+Word: Literal
+
+\ Compiles the literal n. 
+Compiler: Literal
+    Intp: NoIntp ;
+    Comp: Code, compile, ;            ( n -- )
+    Code: doLiteral 
+
+Word: '
+
+\ Looks up xt of name. Searches the list of target words that is managed
+\ in the host. Thus ' only makes sense in immediate mode during
+\ development -- because the list is not available for the selfcontained
+\ target program. 
+Compiler: '   ( name / -- xt )
+    Intp: ' ;
+    Comp: NoComp ; 
+
+Word: [']
+
+\ Compiles the xt of name as a literal. 
+Compiler: [']   ( name / -- )
+    Intp: NoIntp ;
+    Comp: Code, ' compile, ;
+    Code: doLiteral 
+
+Group: FlowControl
+
+The familiar Forth flow control words are also constructed with Holon's
+meta notation. Please note, that CODE, lays down (compiles) the word
+attached to CODE:. 
+
+Word: if
+
+\ The compile action of IF is to lay down ?BRANCH, push the number 2 on
+\ the stack (as a marker for structure checking) and execute >MARK. 
+Compiler: if
+    Intp: NoIntp ;
+    Comp: Code, 2 >Mark ;
+    Code: ?branch 
+
+Word: else
+
+\ Syntax:  ( f -- ) IF <true-action> ELSE <false-action> THEN 
+Compiler: else
+    Intp: NoIntp ;
+    Comp: Code, 2 >Mark 2swap 2 >Resolve ;
+    Code: branch 
+
+Word: then
+
+\ Or:  ( f -- ) IF <true-action> THEN 
+Compiler: then
+    Intp: NoIntp ;
+    Comp: 2 >Resolve ; 
+
+Word: begin
+
+\ Starts an uncounted loop structure. 
+Compiler: begin
+    Intp: NoIntp ;
+    Comp: 3 <Mark ; 
+
+Word: again
+
+\ Syntax:  BEGIN action AGAIN  
+\ The action is repeated indefinitely, unless an EXIT is performed by
+\ action. In this case the colon word containing the loop is ended. 
+Compiler: again
+    Intp: NoIntp ;
+    Comp: Code, 3 <Resolve ;
+    Code: branch 
+
+Word: until
+
+\ Syntax: BEGIN action? UNTIL
+\ The action? must leave a flag. The loop is repeated until the flag is
+\ true. Execution then continues with the word following UNTIL. 
+Compiler: until
+    Intp: NoIntp ;
+    Comp: Code, 3 <Resolve ;
+    Code: ?branch 
+
+Word: while
+
+\ Syntax:  BEGIN action1? WHILE action2 REPEAT 
+\ The loop is repeated as long as action1 leaves a true flag. The action
+\ then continues immediately after REPEAT. 
+Compiler: while
+    Intp: NoIntp ;
+    Comp: Code, 4 >Mark 2swap ;
+    Code: ?branch 
+
+Word: repeat
+
+Compiler: repeat
+    Intp: NoIntp ;
+    Comp: Code, 3 <Resolve 4 >Resolve ;
+    Code: branch 
+
+Word: do
+
+\ Begins a counted loop. Syntax:  ( n1 n2 -- ) DO ...  
+\ Stores loop limit n1 and initial index n2 on the returnstack. 
+Compiler: do
+    Intp: NoIntp ;
+    Comp: Code, 5 >Mark ;
+    Code: <do> 
+
+Word: ?do
+
+\ Begins a counted loop if the loop indices are not equal. 
+Compiler: ?do
+    Intp: NoIntp ;
+    Comp: Code, 5 >Mark ;
+    Code: <?do> 
+
+Word: loop
+
+\ Syntax:  ( n2 n1 -- ) DO action LOOP 
+\ Adds one to the loop index. If the loop index is then equal to the loop
+\ limit, discards the loop parameters on the returnstack and continues
+\ execution immediately following the loop. Otherwise repeats action. 
+Compiler: loop
+    Intp: NoIntp ;
+    Comp: Code, 2dup 2 + 5 <Resolve 5 >Resolve ;
+    Code: <loop> 
+
+Word: +loop
+
+\ Syntax: ( n1 n2 -- ) DO action  n +LOOP 
+\ Adds n to the loop index. If the loop index does not cross the boundary
+\ between the loop limit minus one and the loop limit, continues
+\ excecuting action. Otherwise discards the loop parameters on the stack
+\ and continues execution immediately following the loop. 
+Compiler: +loop
+    Intp: NoIntp ;
+    Comp: Code, 2dup 2 + 5 <Resolve 5 >Resolve ;
+    Code: <+loop> 
+
+Word: I
+
+\ Fetches the index of the innermost loop. 
+Code I   ( -- n )
+     mov ax, 0 [bp]  add ax, 2 [bp]  1push 
+
+Word: I'
+
+\ Fetches the index of the innermost loop in a subword called inside the
+\ loop (one level down). 
+Code I'   ( -- n )
+     mov ax, 4 [bp]  add ax, 6 [bp]  1push 
+
+Word: J
+
+\ Fetches the index of the second innermost loop. 
+Code J  
+     mov ax, 6 [bp]  add ax, 8 [bp]  1push 
+
+Word: K
+
+\ Fetches the index of the third innermost loop. 
+Code K   ( -- n )
+     mov ax, $0C [bp]  add ax, $0E [bp]  1push 
+
+Word: unloop
+
+\ Discards the loop control characters for the current nesting level. An
+\ UNLOOP is required for each nesting level before the definition may be
+\ EXITed. ANS Forth. 
+Code unloop 
+     add bp, # 6  next 
+
+Word: leave
+
+\ Used in action inside a DO..LOOP, immediately leaves the loop and jumps
+\ past LOOP. 
+Code leave
+     mov si, 4 [bp]  add bp, # 6  jmp next(ip)
+     =DebugLeave                  \ sets a pointer in the debugger 
+
+Word: ?leave
+
+\ Leaves DO..LOOP if flag is non-zero. 
+Code ?leave   ( f -- )
+     pop ax   or ax, ax   
+     0= if next then
+     mov si, 4 [bp]  add bp, # 6  jmp next(ip)
+     =Debug?Leave 
+
+Word: leave&exit
+
+\ Exits from DO..LOOP and the current word. A very useful word. 
+Code leave&exit                                
+     mov si, 6 [bp]  mov es, 8 [bp]  add bp, # $0A   
+     next 
+
+Word: bounds
+
+\ Calculates limits for a DO..LOOP. 
+Code bounds   ( n1 n2 -- n1+n2  n1 )
+     pop dx  pop ax  add dx, ax  2push 
+
+Word: times
+
+\ Syntax:  ( n -- ) TIMES ... LOOP ,  equivalent to  0 ?DO ... LOOP. 
+Compiler: times
+    Intp: NoIntp ;
+    Comp: 0 postpone Literal Code, 5 >Mark ;
+    Code: <?do> 
+
+Word: case
+
+\ Starts a case structure, syntax: 
+\ ( n -- ) CASE n1 OF <action1> ENDOF n2 OF <action2> ENDOF ... ENDCASE. 
+Compiler: case
+    Intp: NoIntp ;
+    Comp: 0 ; 
+
+Word: of
+
+\ Compares the top two stack items. If they are equal: discards both
+\ values and continues execution until the following ENDOF, then jumps
+\ behind ENDCASE. Otherwise discards the top value and continues behind
+\ the following ENDOF. 
+Compiler: of
+    Intp: NoIntp ;
+    Comp: Code, 6 >Mark ;
+    Code: <of> 
+
+Word: "of
+
+\ Builds case structures for strings. Syntax:
+\ ( "adr -- ) CASE
+\ " string1" "OF ... ENDOF   
+\ " string2" "OF ... ENDOF  (etc.)  2DROP ENDCASE 
+Compiler: "of
+    Intp: NoIntp ;
+    Comp: Code, 6 >Mark ;
+    Code: <"of> 
+
+Word: endof
+
+\ Continues execution behind the following ENDCASE. 
+Compiler: endof
+    Intp: NoIntp ;
+    Comp: Code, 7 >Mark 2swap 6 >Resolve ;
+    Code: branch 
+
+Word: endcase
+
+\ Default case in CASE structure. Does not delete the stack value.
+\ Normally preceded by DROP or other action that removes the stack value. 
+Compiler: endcase
+    Intp: NoIntp ;
+    Comp: begin dup if 7 >Resolve 0 else -1 then until drop ; 
+
+Group: Objects
+
+Word: Objects-1
+
+Text: Objects-1
+Objects are very useful programming elements with private data and
+actions on the data (methods). A method is evoked by a message to the
+object. Holon makes extensive use of objects.
+In order to avoid the impression of a full object-oriented-approach
+(OOP) we prefer to talk of an object type. This reflects the original
+concept of an abstract data type. 
+
+Word: Objects-2
+
+Text: Objects-2
+Holon uses the syntax:
+   
+   ObjectType: name
+         Data: data space building words
+      Methods: list of words acting on data
+     Messages: list of messages to object
+     
+The methods and the messages are predefined Forth words. Methods and
+messages can be reused in other object types. 
+
+Word: Objects-3
+
+Text: Objects-3
+Methods are Forth words, that are called with a data address on top of
+space (TOS). The first method is the default method. 
+The default method is invoked, if the object is used without a message.
+This makes sense, if the first method delivers the typical value of the
+object. Then, if X and Y are integers, you can write  X 3 + is Y . 
+
+Word: ObjectType:
+
+\ Starts the definition of a new object type. 
+Compiler: ObjectType:
+    Intp: DefineType ;
+    Comp: NoComp ;
+    Code: doVar 
+
+Word: Data:
+
+\ Starts the definition of the data area (instance variables). The data
+\ space is created when an object is defined. 
+Compiler: Data:
+    Intp: CompData ;
+    Comp: NoComp ; 
+
+Word: Methods:
+
+\ Ends the definition of the data area and starts the list of methods.
+\ The methods are normal Forth words. 
+Compiler: Methods:
+    Intp: NoIntp ;
+    Comp: CompMethods ; 
+
+Word: Messages:
+
+\ Ends the method list and starts the list of messages. The messages are
+\ predefined message: words. 
+Compiler: Messages:
+    Intp: NoIntp ;
+    Comp: CompMessages ; 
+
+Word: Message:
+
+\ Constructs the message name. The message is internally identified by a
+\ unique number. 
+Compiler: Message:   ( name / -- )
+    Intp: DefineMessage ;
+    Comp: NoComp ; 
+
+Group: Messages
+
+We collect here the messages that are commonly used in the system. 
+
+Word: get
+
+Message: get 
+
+Word: pop
+
+Message: pop 
+
+Word: is
+
+Message: is 
+
+Word: ist
+
+Alias: ist is 
+
+Word: put
+
+Message: put 
+
+Word: push
+
+Message: push 
+
+Word: adr
+
+Message: adr 
+
+Word: obj
+
+Message: obj 
+
+Word: set
+
+Message: set 
+
+Word: print
+
+Message: print 
+
+Word: clear
+
+Message: clear 
+
+Word: init
+
+message: init 
+
+Word: add
+
+Message: add 
+
+Word: insert
+
+Message: insert 
+
+Word: ask
+
+Message: ask 
+
+Word: edit
+
+Message: edit 
+
+Word: upcase
+
+Message: upcase 
+
+Word: start
+
+Message: start 
+
+Word: stop
+
+Message: stop 
+
+Word: continue
+
+Message: continue 
+
+Group: Datatypes
+
+In addition to the standard Forth types Constant and Variable Holon
+uses the object-types Integer and Double . More involved types will
+be used in utility modules. 
+
+Word: Constant
+
+\ A defining word that creates a constant with value n. 
+\ Syntax: n CONSTANT name.  The constant name delivers the value n. 
+Compiler: Constant   
+    Intp: SkipName JmpCode, , ;    ( n -- )
+    Comp: NoComp ;
+    Code: doCon 
+
+Word: Variable
+
+\ A defining word that creates a variable with initial datum = zero.
+\ Syntax: VARIABLE name. The variable name delivers the address of the
+\ datum. 
+Compiler: Variable   
+    Intp: SkipName CallCode, 0 , ;
+    Comp: NoComp ;
+    Code: doVar 
+
+Word: Integer
+
+\ A defining word that creates 16 bit integer objects, initialized to n. 
+ObjectType: Integer
+      Data: integer,   ( n -- )
+   Methods: @   !  noop  -1!  0!    +!  
+  Messages: get is adr   set  clear add 
+
+Word: XX
+
+\ An experimental integer and some examples of how it can be used. 
+33 integer XX          
+
+\    get XX              delivers the value of XX (33)
+\    XX                  delivers the value of XX
+\    (if no message is applied, the first message (get) is used.)
+\    44 is XX            stores 44 as the value of XX
+\    55 add XX           adds 55 to the current value of XX
+\    66 adr XX !         stores 66 in the data space of XX
+\                        equivalent to  66 is XX
+\    set XX              stores a true value (-1) in XX
+\    clear XX            stores a false value (0) in XX 
+
+Word: ClrDouble
+
+: ClrDouble   ( obj -- )
+     0. rot 2!  ; 
+
+Word: SetDouble
+
+: SetDouble   ( obj -- )
+     -1. rot 2!  ; 
+
+Word: Double
+
+\ Creates 32 bit integer objects. 
+ObjectType: Double
+      Data: double,    ( d -- )     
+   Methods: 2@  2! noop setdouble clrdouble d+! 
+  Messages: get is adr  set       clear     add 
+
+Word: @p
+
+\ Reads contents of adr pointed to by obj. 
+: @p   ( obj -- n )
+     @ @  ; 
+
+Word: !p
+
+\ Stores n in address at obj. 
+: !p   ( n obj -- )
+     @ !  ; 
+
+Word: Pointer
+
+\ Defines pointers to addresses, initial address is adr. The address
+\ pointed to is retrieved by adr, changed with set. The contents at the
+\ address are retrieved with get, changed with put. 
+ObjectType: Pointer
+      Data: integer,   ( adr -- )    
+   Methods: @p  !p  @   !  
+  Messages: get is  adr set 
+
+Group: Comparison
+
+Word: =
+
+\ Flag f is true if x1 is bit-for-bit the same as x2. 
+Code =   ( x1 x2 -- f )
+     pop ax   pop cx   sub ax, cx   sub ax, # 1
+     sbb ax, ax   1push 
+
+Word: <>
+
+\ Flag f is true if x1 is bit-for-bit unequal x2. 
+Code <>   ( x1 x2 -- f )
+     pop ax  pop cx  sub ax, cx  neg ax  sbb ax, ax  1push 
+
+Word: u<
+
+\ Flag f is true if u1 is less than u2. 
+Code u<   ( u1 u2 -- f )
+     pop cx  pop ax  sub ax, cx  sbb ax, ax  1push 
+
+Word: u>
+
+\ Flag f is true if u1 is greater than u2. 
+Code u>   ( u1 u2 -- f )
+     pop ax  pop cx  sub ax, cx  sbb ax, ax  1push 
+
+Word: <
+
+\ Flag f is true if n1 is less then n2. 
+Code <   ( n1 n2 -- f )
+     2pop  cmp ax, bx  >= if  sub ax, ax  1push  then
+     mov ax, # -1  1push 
+
+Word: <=
+
+\ Flag f is true if n1 is less or equal n2. 
+Code <=   ( n1 n2 -- f )
+     2pop  cmp ax, bx  >= if  sub ax, ax  1push  then
+     mov ax, # -1  1push 
+
+Word: >
+
+\ Flag f is true if n1 is greater then n2. 
+Code >   ( n1 n2 -- f )
+     2pop  cmp ax, bx  <= if  sub ax, ax  1push  then
+     mov ax, # -1  1push 
+
+Word: >=
+
+\ Flag f is true if n1 is greater or equal n2. 
+Code >=   ( n1 n2 -- f )
+     2pop  cmp ax, bx  < if  sub ax, ax  1push  then
+     mov ax, # -1  1push 
+
+Word: between
+
+\ Flag f is true if n1 <= n <= n2. 
+Code between   ( n n1 n2 -- f )
+     pop bx  pop cx  pop ax   sub dx, dx     \ 4.115
+     cmp ax, bx  <= if  cmp ax, cx  >= if  dec dx  then then
+     push dx  next 
+
+Word: 0=
+
+\ Flag f is true if x is equal to zero. 
+Code 0=   ( x -- f )
+     pop ax   sub ax, # 1   sbb ax, ax   1push 
+
+Word: 0<
+
+\ Flag f is true if n is less than zero. 
+Code 0<   ( n -- f )
+     pop ax   cwd   push dx   next 
+
+Word: 0>
+
+\ Flag f is true if n is greater then zero. 
+Code 0>   ( n -- f )
+     pop ax   neg ax    ov<> if   cwd   push dx   next   then
+     shl ax, # 1   1push 
+
+Word: 0<>
+
+\ Flag f is true if one or more bits in x are non-zero. 
+Code 0<>   ( x -- f )
+     pop ax   neg ax    sbb ax, ax   1push 
+
+Word: "<>
+
+\ Compares strings "adr1 and "adr2 over their common length. Leaves 0
+\ if both strings are equal. Leaves -1 if string1 is smaller, else 1.
+\ If the common part is equal, it leaves -1 if string1 is shorter else 1. 
+Code "<>   ( "adr1 "adr2 -- -1|0|1 )
+     cld   mov bx, si   mov dx, es
+     pop si  sub ax, ax  lodsb                         ( ax=count2)
+     mov cx, si  mov di, cx  mov cx, ds  mov es, cx
+     mov cx, ax  ( count2)  pop si  lodsb              ( ax=count1)
+     cmp cx, ax  > 
+     if   mov cx, ax  mov ax, # -1 
+     else < if mov ax, # 1 else sub ax, ax then
+     then or cx, cx  0<>
+     if   repz cmpsb 0<> 
+          if 0< if mov ax, # -1 else mov ax, # 1 then then
+     then
+     mov  si, bx  mov es, dx  1push 
+
+Word: "=
+
+\ Compares two strings and leaves true if the strings are equal both in
+\ length and contents. 
+: "=   ( "adr1 "adr2 -- f )
+     "<> 0=  ; 
+
+Group: Logic_Operat.
+
+Word: and
+
+\ Leaves x3 as the bit-by-bit logical AND of x1 with x2. 
+Code and   ( x1 x2 -- x3 )
+     2pop   and ax, bx   1push 
+
+Word: or
+
+\ Leaves x3 as the bit-by-bit logical OR of x1 with x2. 
+Code or   ( x1 x2 -- x3 )
+     2pop   or ax, bx   1push 
+
+Word: xor
+
+\ Leaves x3 as the bit-by-bit logical XOR of x1 with x2. 
+Code xor   ( x1 x2 -- x3 )
+     2pop   xor ax, bx   1push 
+
+Word: not
+
+\ Performs bitwise inversion of x1, giving x2. 
+Code not   ( x1 -- x2 )
+     pop ax   not ax   1push 
+
+Word: invert
+
+\ Performs bitwise inversion of x1, giving x2. 
+Code invert   ( x1 -- x2 )
+     pop ax   not ax   1push 
+
+Word: lShift
+
+\ Performs a logical left shift of u bit-places on x1, giving x2. Puts
+\ zero in the least significant bits vacated by the shift. 
+Code lShift   ( x1 u -- x2 )
+     pop cx  pop ax  shl ax, cl  1push 
+
+Word: rShift
+
+\ Performs a logical right shift of u bit-places on x1, giving x2. Puts
+\ zero in the most significant bits vacated by the shift. 
+Code rShift   ( x1 u -- x2 )
+     pop cx  pop ax  shr ax, cl  1push 
+
+Word: true
+
+\ Defined value of logical true. All flags values that are unequal to
+\ zero are accepted as true in logical decisions. 
+-1 constant true 
+
+Word: false
+
+\ Numerical value of logical false. 
+0 constant false 
+
+Word: Flag
+
+\ Logical flag, either true (set) or false (clear). 
+ObjectType: Flag
+      Data: 0 integer,
+   Methods: @   !  noop  -1!  0!  
+  Messages: get is adr   set  clear 
+
+Group: 16Bit_Arithm.
+
+Word: +
+
+\ Adds n1 to n2, giving the sum n3 
+Code +   ( n1 n2 -- n3 )
+     2pop   add ax, bx   1push 
+
+Word: -
+
+\ Subtracts n2 from n1, giving the difference n3 
+Code -   ( n1 n2 -- n3 )
+     2pop   sub ax, bx   1push 
+
+Word: *
+
+\ Multiplies n1 by n2, giving the product n3 
+Code *   ( n1 n2 -- n3 )
+     2pop   mul bx   1push 
+
+Word: /
+
+\ Divides n1 by n2, ginving the quotient n3. 
+Code /   ( n1 n2 -- n3 )
+     2pop  cwd  mov cx, bx  xor cx, dx
+     0>= if  idiv bx  1push  then
+     idiv bx  
+     ( or dx, dx  0<> if  dec ax  then )    \ floor towards -infinity
+     1push 
+
+Word: /mod
+
+\ Divides n1 by n2, giving the remainder n3 and the quotient n4. 
+Code /mod   ( n1 n2 -- n3=rem n4=quot )
+     2pop  cwd  mov cx, bx  xor cx, dx
+     0>= if  idiv bx  2push  then
+     idiv bx  or dx, dx  
+     0<> if  add dx, bx  dec ax  then  2push 
+
+Word: mod
+
+\ Divides n1 by n2, giving the remainder n3. 
+: mod   ( n1 n2 -- n3=rem )
+     /mod drop  ; 
+
+Word: */mod
+
+\ Multiplies n1 by n2 producing the double intermediate result d. Divides
+\ d by n3 producing the remainder n4 and the quotient n5. 
+Code */mod   ( n1 n2 n3 -- n4=rem n5=quot )
+     2pop  pop cx  imul cx  mov cx, bx  xor cx, dx
+     0>= if  idiv bx  2push  then
+     idiv bx  or dx, dx  
+     0<> if  add dx, bx  dec ax  then  2push 
+
+Word: */
+
+\ Multiplies n1 by n2 producing the double intermediate result d. Divides
+\ d by n3 giving the quotient n4. Scaling operation. 
+: */    ( n1 n2 n3 -- n4 )
+     */mod nip  ; 
+
+Word: 1+
+
+\ Adds 1 to n1 giving the sum n2. 
+Code 1+   ( n1 -- n2 )
+     pop ax   inc ax   1push 
+
+Word: 1-
+
+\ Subtracts 1 from n1 giving the difference n2 
+Code 1-   ( n1 -- n2 )
+     pop ax   dec ax   1push 
+
+Word: 2+
+
+\ Adds 2 to n1 giving the sum n2. 
+Code 2+   ( n1 -- n2 )
+     pop ax   inc ax  inc ax   1push 
+
+Word: 2-
+
+\ Subtracts 2 from n1 giving the difference n2. 
+Code 2-   ( n1 -- n2 )
+     pop ax   dec ax  dec ax   1push 
+
+Word: 2*
+
+\ n2 is the result of shifting n1 one bit towards the most significant
+\ bit, filling the vacated least significant bit with zero. 
+Code 2*   ( n1 -- n2 )
+     pop ax   shl ax, # 1   1push 
+
+Word: 2/
+
+\ n2 is the result of shifting n1 one bit towards the least significant
+\ bit, leaving the most significant bit unchanged. 
+Code 2/   ( n1 -- n2 )
+     pop ax   sar ax, # 1   1push 
+
+Word: min
+
+\ n3 is the lesser of n1 and n2. 
+Code min   ( n1 n2 -- n3 )
+     2pop  cmp ax, bx  <= if  1push  then  push bx  next 
+
+Word: max
+
+\ n3 is the greater of n1 and n2. 
+Code max   ( n1 n2 -- n3 )
+     2pop  cmp ax, bx  <= if  push bx  next then  1push 
+
+Word: abs
+
+\ u is the absolute value of n. 
+Code abs   ( n -- u )
+     pop ax  or ax, ax  0< if  neg ax  then  1push 
+
+Word: negate
+
+\ Negates n1, giving its arithmetic inverse n2. 
+Code negate   ( n1 -- n2 )
+     pop ax   neg ax   1push 
+
+Word: ?negate
+
+\ Negates n1, giving n3, if n2 is a negative number. 
+: ?negate   ( n1 n2 -- n3 )
+     0< if negate then  ; 
+
+Group: 32Bit_Arithm.
+
+Word: d+
+
+\ Adds d1 to d2, giving the sum d3. 
+Code d+   ( d1 d2 -- d3 )
+     pop ax  pop dx  pop bx  pop cx  add dx, cx  adc ax, bx
+     2push 
+
+Word: dabs
+
+\ d2 is the absolute value of d1. 
+Code dabs   ( d1 -- d2 )
+     pop ax  or ax, ax  0>= if  1push  then
+     pop dx  neg ax  neg dx  sbb ax, # 0  2push 
+
+Word: dnegate
+
+\ d2 is the negation of d1. 
+Code dnegate   ( d1 -- d2 )
+     pop ax pop dx  neg ax  neg dx  sbb ax, # 0  2push 
+
+Word: d-
+
+\ Subtracts d2 from d1, giving the difference d3. 
+: d-   ( d1 d2 -- d3 )
+     dnegate d+  ; 
+
+Word: d0=
+
+\ Flag f=true if and only if d is equal to zero. 
+: d0=   ( d -- f )
+     or 0=  ; 
+
+Word: d=
+
+\ Flag f=true if and only if ud1 is bit for bit the same as ud2. 
+: d=   ( ud1 ud2 -- f )
+     d- d0=  ; 
+
+Word: d<>
+
+: d<>   ( d1 d2 -- f )
+     d= 0=  ; 
+
+Word: du<
+
+\ Flag f=true if and only if ud1 is less than ud2. 
+Code du<   ( ud1 ud2 -- f )
+     pop dx  pop bx  pop cx  pop ax  
+     sub ax, bx  sbb cx, dx  sbb ax, ax  1push 
+
+Word: d<
+
+\ Flag f=true if and only if d1 is less than d2. 
+: d<   ( d1 d2 -- f )
+     2 pick over = if du< else nip rot drop < then  ; 
+
+Word: d>
+
+\ Flag f=true if and only if d1 is greater than d2. 
+: d>   ( d1 d2 -- f )
+     2swap d<  ; 
+
+Word: dmin
+
+\ d3 is the lesser of d1 and d2. 
+: dmin   ( d1 d2 -- d3 )
+     2over 2over d> if 2swap then 2drop  ; 
+
+Word: dmax
+
+\ d3 is the greater of d1 and d2. 
+: dmax   ( d1 d2 -- d3 )
+     2over 2over d< if 2swap then 2drop  ; 
+
+Group: Mixed_Arithm.
+
+Word: s>d
+
+\ Converts the number n to the double number d with the same numerical
+\ value. 
+Code s>d   ( n -- d )
+     pop ax  cwd  xchg dx, ax  2push 
+
+Word: d>s
+
+\ n is the single number equivalent to d, if possible. An ambiguous
+\ condition exists if d lies outside the range of a signed single number. 
+: d>s   ( d -- n )
+     drop  ; 
+
+Word: m*
+
+\ Multiplies n1 by n2, giving the double number d. 
+Code m*   ( n1 n2 -- d )
+     pop cx  pop ax  imul cx  push ax  push dx  next 
+
+Word: um*
+
+\ Multiplies u1 by u2, giving the unsigned double number product ud. 
+Code um*   ( u1 u2 -- ud )
+     2pop   mul bx   xchg dx, ax   2push 
+
+Word: um/mod
+
+\ Divides ud by u1, giving the quotient u3 and the remainder u2. 
+Code um/mod   ( ud u1 -- u2=rem u3=quot )
+     pop bx   pop dx   pop ax   cmp dx, bx   u>=
+     if   mov ax, # -1   mov dx, ax   2push   then
+     div bx   2push 
+
+Word: um/
+
+\ Divides ud by u1, giving the quotient u2. 
+: um/   ( ud u1 -- u2 ) 
+     um/mod nip  ; 
+
+Word: mu/mod
+
+\ Divides unsigned double ud1 by unsigned number u1 and leaves unsigned
+\ double quotient ud2 and unsigned remainder u2. 
+: mu/mod   ( ud1 u1 -- u2=rem  ud2=quot )
+     >r 0 r@ um/mod r> swap >r um/mod r>  ; 
+
+Group: Characters
+
+Word: pad0
+
+\ An empty space for many uses. 
+create pad0
+     112 allot 
+
+Word: pad
+
+\ The classical Forth playground with buffers of 32 bytes before and
+\ 80 bytes behind (fixed location, does not float above Here). 
+pad0 32 + constant pad 
+
+Word: 'bl
+
+\ Ascii value of Space ('blank'). 
+32 constant 'bl 
+
+Word: 'cr
+
+\ Ascii value of Enter or Return. 
+13 constant 'cr 
+
+Word: 'bsp
+
+\ Ascii value of Backspace. 
+8 constant 'bsp 
+
+Word: #Out
+
+\ Contains a count of the characters emitted since the last cr. 
+0 Integer #Out 
+
+Word: emit
+
+\ The basic emit words are defined as execution vectors to facilitate
+\ redirection of text output. 
+Doer emit   ( c -- ) 
+
+Word: type
+
+Doer type   ( adr n -- ) 
+
+Word: typel
+
+Doer typel   ( seg off n -- ) 
+
+Word: cr
+
+\ Everybody wants his/her own cr-Routine. 
+Doer cr 
+
+Word: cr0
+
+\ Emits a carriage return and line feed and resets the position counter. 
+: cr0
+     13 emit 10 emit 0 is #out  ; 
+
+Word: makeCR
+
+\ Defines our cr routine. 
+( makeCR )   make cr cr0 
+
+Word: space
+
+\ Emits one space character. 
+: space
+     32 emit  ; 
+
+Word: spaces
+
+\ Emits n space characters. 
+: spaces   ( n -- )
+     0 ?do space loop  ; 
+
+Word: key?
+
+\ Checks if a key is available and delivers flag, leaves key in buffer. 
+Doer key?   ( -- f ) 
+
+Word: key
+
+\ Waits for a key and delivers ascii code or functioncode plus 0 (see
+\ BiosKey). 
+Doer key   ( -- c | func 0 ) 
+
+Group: Strings
+
+A string is a sequence of text bytes with a leading count byte and a
+trailing zero byte. Strings are stored and handled in code space. The
+string-address "adr is the address of the count byte.
+Two object-types are defined: String (with an initial string) and
+Stringbuf (with a given buffer size). Both accept the messages get
+put adr print and insert and ask for the input of a string. 
+
+Word: "obj
+
+\ Address of data space of current object. 
+0 Integer "obj 
+
+Word: "adr
+
+\ Address of current string. 
+: "adr   ( -- "adr )
+     "obj 1+  ; 
+
+Word: "len
+
+\ Length of current string. 
+: "len   ( -- n )
+     "adr c@  ; 
+
+Word: "feld
+
+\ Maximal length (field) of current string. 
+: "feld   ( -- n )
+     "obj c@  ; 
+
+Word: "pos
+
+\ Current position in a string 
+0 Integer "pos 
+
+Word: "insert
+
+\ Inserts character c into string at current position, if inside maximum 
+: "insert   ( c -- )
+     "pos "feld > 0=
+     if   dup emit "adr "pos + c!  1 add "pos
+     else drop
+     then  ; 
+
+Word: "close
+
+\ Completes the accepted string. 
+: "close
+     "pos 1- "adr c!  ; 
+
+Word: CurOn
+
+\ Will later execute a routine which makes the cursor visible. 
+Doer CurOn 
+
+Word: CurOff
+
+\ Will be made into a routine which turns the cursor off. 
+Doer CurOff 
+
+Word: "Accept
+
+\ Receives a string (address and field defined by obj). Input is
+\ terminated by Enter. Prepared to handle extended key codes. 
+: "Accept   
+     1 is "pos  CurOn
+     begin  key ?dup
+          if   \ normal char
+               case                 
+               'bsp of "pos 1 > if 'bsp emit 'bl emit 
+                                   'bsp emit -1 add "pos then endof
+               'cr  of "close CurOff exit endof
+               "insert  endcase  
+          else \ extended char
+               drop    
+          then     
+     again  ; 
+
+Word: <,">
+
+\ Runcode for embedded strings, leaves address of following string. 
+: <,">   ( -- "adr )
+     2r@                      \ es:si point to next word = 'string
+     @l                       \ start of string in zCode
+     r> 2+ >r  ;              \ make si point behind stringpointer 
+
+Word: "
+
+\ Intp: Extracts text ended by " and moves text to data space and code
+\ space. Comp: Compiles string into current word and adds a zero byte
+\ (used for file handling). 
+Compiler: "   ( text" / )
+    Intp: ascii " parse  ;
+    Comp: Code, Here compile, ,"  0 c,  ;
+    Code: <,"> 
+
+Word: "type
+
+\ Types the string at "adr. 
+: "type   ( "adr -- )
+     count type  ; 
+
+Word: <<,">>
+
+\ Runcode for a string embedded in calling word, leaves address of
+\ string. 
+: <<,">>   ( -- "adr )
+     2r> 
+     2r@ @l r> 2+ >r       \ you can't replace this by <,">
+     -rot 2>r  ; 
+
+Word: <.">
+
+\ Runcode for emitting the following string. 
+: <.">
+     <<,">>  "type  ; 
+
+Word: ."
+
+\ Compiles the following text ended by ", types the text at runtime. 
+Compiler: ."   ( text" / )
+    Intp: NoIntp ;
+    Comp: Code, Here compile,  ,"  ;
+    Code: <."> 
+
+Word: "get
+
+\ Method, delivers "adr of string object. 
+: "get   ( obj -- "adr )
+     1+  ; 
+
+Word: "blank
+
+: "blank   ( -- )
+     "adr 1+ "feld 'bl fill  0 "adr c!  ; 
+
+Word: "put
+
+\ Stores string("adr) in string(obj), if space is available. 
+: "put   ( "adr obj -- )
+     is "obj  "blank
+     dup c@ "feld >
+     if   drop ." String is too long"
+     else dup c@ 1+  "adr swap move
+     then  ; 
+
+Word: "add
+
+\ Adds string("adr) to string(obj), if space available. 
+: "add   ( "adr obj -- )
+     is "obj
+     dup c@  "len +  "feld >
+     if   drop ." String is too long"
+     else count dup is "pos
+          "adr count dup add "pos +  
+          swap move
+          "pos "adr c!
+     then  ; 
+
+Word: "ins
+
+\ Inserts string("adr) into string(obj) at offset i, if it fits inside. 
+: "ins   ( "adr i obj -- )
+     is "obj  is "pos
+     dup c@ "pos + "feld >
+     if   drop ." String is too long"
+     else count "adr "pos + swap move
+     then  ; 
+
+Word: "print
+
+\ Prints string of obj. 
+: "print   ( obj -- )
+     "get "type  ; 
+
+Word: "ask
+
+\ Accepts text input into string, limited to the space available. 
+: "ask   ( obj -- )
+     is "obj  "blank  "Accept  ; 
+
+Word: "UC
+
+\ Converts text obj to upper case over field of text. 
+Code "UC   ( obj -- )
+     pop bx  
+     mov dl, 0 [bx] byte  inc bx        \ field
+     mov cl, 1 [bx] byte  inc bx        \ count
+     cmp cl, dl  > if  mov cl, dl  then   
+     cmp cl, # 0  >
+     if   begin     mov al, 0 [bx] byte  cmp al, # $60 > 
+                    if cmp al, # $7B < if sub al, # $20 then then
+                    mov 0 [bx], al  inc bx  dec cl  0=
+          until
+     then next 
+
+Word: "Edit
+
+\ Forward reference to the edit routine. 
+Doer "Edit   ( obj -- ) 
+
+Word: init"Edit
+
+\ No edit routine yet. Drops obj pointer. 
+( init"Edit )
+     make "Edit drop 
+
+Word: "clear
+
+\ Erases string obj. 
+: "clear   ( obj -- )
+     is "obj  "blank  ; 
+
+Word: String
+
+\ Creates a string object initalized to the counted string in data space.
+\ The object also reserves space for a zero byte for filename operations.
+\ Syntax: " text" String <name> 
+ObjectType: String   
+      Data: "count byte, "copy  0 byte,
+   Methods: "get "put noop "print "clear "add "ins  "ask "edit "UC  
+  Messages:  get  put  obj  print  clear  add insert ask  edit upcase 
+
+Word: StringBuf
+
+\ Creates a string buffer for strings of length n. Reserves an additional
+\ byte for filename operations (asciiz). 
+ObjectType: StringBuf   ( n -- )
+      Data: dup byte, 2 + 0bytes,
+   Methods: "get "put noop "print "clear "add "ins "ask "edit "UC  
+  Messages:  get  put  obj  print  clear  add insert ask edit upcase 
+
+Word: >asciiz
+
+\ Delivers adr of ascii string in DX ready for DOS file calls. [Must not
+\ change AX]. 
+Label >asciiz   ( "adr calladr -- )
+     pop di  
+     pop dx  mov bx, dx  
+     sub cx, cx  mov cl, 0 [bx] byte  add bx, cx  inc bx  
+     mov 0 [bx], # 0 byte
+     inc dx   
+     push di  ret 
+
+Word: asciiz
+
+\ Converts counted string at "adr into a zero terminated string at "adr0. 
+Code asciiz   ( "adr -- "adr0 )
+     call >asciiz   push dx   next 
+
+Word: aString
+
+\ Example of a string object. 
+" Textstring" String aString 
+
+Word: bString
+
+\ Example stringbuffer. 
+20 Stringbuf bString 
+
+Group: FormatedOutput
+
+Word: TheBase
+
+\ The base for number conversion made accessible as an integer object. 
+Base Pointer TheBase 
+
+Word: hex
+
+\ Sets base to hexadecimal. 
+: hex
+     16 is theBase  ; 
+
+Word: decimal
+
+: decimal
+     10 is theBase  ; 
+
+Word: SetBase
+
+\ Initializes the base. 
+( SetBase )
+     decimal 
+
+Word: Hld
+
+\ Holds the current position (address) of a numeric string during 
+\ formatting. 
+0 Integer Hld 
+
+Word: hold
+
+\ Appends character c to the numeric string. 
+: hold   ( c -- )
+     -1 add hld  hld c!  ; 
+
+Word: <#
+
+\ Starts the formating of a number. 
+: <#
+     pad is hld  ; 
+
+Word: #>
+
+\ Ends the formating of a number, leaves address and length of string. 
+: #>   ( d -- adr u )
+     2drop hld pad over -  ; 
+
+Word: "#>
+
+\ Ends number conversion and delivers counted string. 
+: "#>   ( d -- "adr )                                  
+     #> over 1- c! 1-  ; 
+
+Word: sign
+
+\ Appends a "-" character if n is negative. 
+: sign   ( n -- )
+     0< if [char] - hold then  ; 
+
+Word: #
+
+\ Converts one digit according to base and appends character to numeric 
+\ string. 
+: #   ( ud1 -- ud2 )
+     theBase mu/mod rot 9 over < if 7 + then
+     [char] 0 + hold  ; 
+
+Word: #s
+
+\ Converts all (remaining) digits to numeric string. 
+: #s   ( ud -- 0 0 )
+     begin # 2dup or 0= until  ; 
+
+Word: (ud.)
+
+\ Converts unsigned double number ud to a string. 
+: (ud.)   ( ud -- adr n )
+     <# #s #>  ; 
+
+Word: "d
+
+\ Converts number d to string at "adr. 
+: "d    ( d -- "adr )
+     <# #s "#>  ; 
+
+Word: ud.
+
+\ Types ud unformated and appends a space. 
+: ud.   ( ud -- )
+     (ud.) type space  ; 
+
+Word: ud.r
+
+\ Types ud in field of width u. 
+: ud.r   ( ud u -- )
+     >r (ud.) r> over - spaces type  ; 
+
+Word: (u.)
+
+\ Converts the unsigned number u1 to a text-string and delivers the
+\ address of the first character adr and the length of the string u2. 
+: (u.)   ( u1 -- adr u2 )
+     0 (ud.)  ; 
+
+Word: u.
+
+\ Types unsigned number u unformated. 
+: u.   ( u -- )
+     (u.) type space  ; 
+
+Word: u.r
+
+\ Types u1 in field of width u2. 
+: u.r   ( u1 u2 -- )
+     0 swap ud.r  ; 
+
+Word: (.)
+
+\ Converts the number n to a text-string and delivers the address of the
+\ first character adr and the length of the string u. 
+: (.)   ( n -- adr u )
+     dup abs 0 <# #s rot sign #>  ; 
+
+Word: .
+
+\ Types signed number n as an integer number followed by a space. 
+: .   ( n -- )
+     (.) type space  ; 
+
+Word: .r
+
+\ Types n in field of width u. 
+: .r   ( n u -- )
+     >r (.) r> over - spaces type  ; 
+
+Word: (d.)
+
+\ Converts the double number d to a text-string and delivers the address
+\ of the first character adr and the length of the string u. 
+: (d.)   ( d -- adr u )
+     tuck dabs <# #s rot sign #>  ; 
+
+Word: d.
+
+\ Types the double number d. 
+: d.   ( d -- )
+     (d.) type space  ; 
+
+Word: d.r
+
+\ Types d in field of width u. 
+: d.r   ( d u -- )
+     >r (d.) r> over - 0 max spaces type  ; 
+
+Word: #dec
+
+\ Number of decimals. 
+3 Integer #dec 
+
+Word: #fld
+
+\ Width of field. 
+8 Integer #fld 
+
+Word: format
+
+\ Defines number format to be shown a field of width u1 with u2 decimals. 
+: format   ( u1 u2 -- )
+     is #dec  is #fld  ; 
+
+Word: +sp
+
+\ Completes field with spaces. 
+: +sp
+     #fld pad hld - - 0 max 0 ?do 32 hold loop  ; 
+
+Word: "d.fn
+
+\ Converts double number d into string "adr with #dec decimals. 
+: "d.fn  ( d -- "adr )                                      
+     tuck dabs 
+     <# #dec ?dup if 0 do # loop 46 hold then #s rot sign +sp "#>  ; 
+
+Word: d.fn
+
+\ Prints double number d in a field of width #fld with #dec decimals. 
+: d.fn   ( d -- )
+     "d.fn  "type  ; 
+
+Group: Text>Number
+
+Word: "addr
+
+\ Address of a string, used with "len and "pos for system operations on a
+\ string. 
+0 Integer "addr 
+
+Word: "c@
+
+\ Fetches char at "pos from "addr. 
+: "c@   ( -- c )
+     "addr "pos + c@  ; 
+
+Word: dpl
+
+\ Contains place of decimal point after conversion of text to a number
+\ (-1 if no double number). 
+0 integer dpl 
+
+Word: double?
+
+\ Flag is true if we are converting a double number. 
+: double?   ( -- f )
+     dpl 1+ 0<>  ; 
+
+Word: Digit
+
+\ Returns binary value of char c according to base and true, or char and
+\ false if c is no digit. Called by interpreter with c converted to
+\ uppercase (if non numeric). 
+Code Digit   ( c base -- n f )
+     pop dx  pop ax  push ax   
+     sub al, # char 0  jb L1  
+     cmp al, # 9  >
+     if   cmp al, # $11  jb L2   
+          sub al, # 7  
+     then
+     cmp al, dl  jae L3
+     mov dl, al   pop ax   mov ax, # -1  2push
+     L1: L2: L3:  sub ax, ax  1push 
+
+Word: NumBase
+
+\ Local number base for conversion. 
+0 integer NumBase 
+
+Word: Neg?
+
+\ True for a negative number. 
+0 integer Neg? 
+
+Word: ?Leading
+
+\ Checks first char for minus or a change of number base. Ignores plus
+\ and space. 
+: ?Leading
+     "c@ case
+          [char] - of true is neg? endof
+          [char] + of endof
+          'bl      of endof
+          [char] $ of 16 is NumBase endof
+          [char] & of 8 is NumBase endof
+          [char] % of 2 is NumBase endof
+     drop exit endcase  1 add "pos  ; 
+
+Word: Convert
+
+\ Converts string in "addr from current position, converting ud1 into ud2
+\ according to NumBase, until "pos points to non-digit character. 
+: Convert   ( ud1 -- ud2 )
+     begin     "c@ NumBase digit
+     while     swap NumBase um* drop rot NumBase um* d+
+               double? if 1 add dpl then
+               1 add "pos
+     repeat drop  ; 
+
+Word: Number?
+
+\ Converts string "adr into number if possible (f=true). Accepts a
+\ leading -,+,$,&,% . Conversion continues until the final zero byte
+\ (ignoring count byte). Expects non-numeric characters to be in upper
+\ case. 
+: Number?   ( "adr -- d f )
+     asciiz is "addr  0 is "pos   
+     theBase is NumBase  false is neg?
+     ?Leading "c@                        \ not final char?
+     if   0.0  -1 is dpl
+          begin     Convert  "c@ [char] . =
+          while     1 add "pos  0 is dpl
+          repeat 
+          neg? if dnegate then  "c@ 0 =  
+     else 0 0 0 
+     then  ; 
+
+Word: >Number
+
+\ ud2 is the unsigned result of converting the characters within the
+\ string specified by adr1, u1 into digits, using the number in BASE, and
+\ adding each into ud1 after multiplying ud1 by the number in BASE.
+\ Conversion continues left-to-right until a character is not convertible
+\ or the string is entirely converted. adr2 is the location of the first
+\ unconverted character or the first character past the end of the
+\ string. u2 is the number of unconverted characters. ANS Forth. 
+: >Number   ( ud1 adr1 u1 -- ud2 adr2 u2 )
+     dup >r over + 0 swap c!                                \ 4.226
+     is "addr  clear "pos
+     theBase is NumBase  false is neg?
+     Convert "addr "pos + r> "pos -  ; 
+
+Group: Standard
+
+Word: ANS_Forth
+
+Text: ANS_Forth
+The programming language Forth has been standardized as ANS Forth by
+the American National Standards Institute (ANSI) in 1994. The standard
+covers the classical Forth program development in the 'all-in-one'
+system, wherein the application is built on top of the development
+system. The standard does not cover the case of cross-development,
+therefore Holon can, in principle, not be considered a standard Forth
+system.
+However, the kernel modules of Holon follow the standard as closely as
+possible. All words with the same name as in ANS Forth have the
+standard behaviour. 
+
+Word: GlueWords
+
+Text: GlueWords
+For reasons of portability ANS Forth demands a series of words which
+consider and hide the specifics of an actual Forth machine. We collect
+here the glue words, which allow you to import a standard Forth program
+into Holon. 
+
+Word: Cell
+
+\ Size of a cell in the present Forth model = 2 bytes. 
+2 constant Cell 
+
+Word: Cells
+
+\ n2 is the size in address units of n1 cells. 
+: Cells   ( n1 -- n2)
+     Cell * ; 
+
+Word: Cell+
+
+\ Adds the size of address units of a cell to adr1 giving adr2. 
+: Cell+   ( adr1 -- adr2 )
+    1 Cells + ; 
+
+Word: Chars
+
+\ n2 is the size in address units of n1 characters. 
+: Chars  ( n1 -- n2)
+     ; 
+
+Word: Char+
+
+\ Adds the size in address units of a character to adr1, giving adr2. 
+: Char+   ( adr1 -- adr2)
+     1 Chars + ; 
+
+Word: Align
+
+: Align
+     ; 
+
+Word: Aligned
+
+: Aligned
+     ; 
+
+Word: Accept
+
+\ The standard word ACCEPT is not implemented. Please use the string
+\ method ASK. We encourage the use of strings and the associated
+\ messages. 
+: Accept
+     ; 
+
+Word: bl
+
+Alias: bl 'bl 
+
+Word: Recurse
+
+\ The standard word RECURSE is not implemented. Holon allows recursion in
+\ the natural way.  Syntax:   : WORD  ... WORD ... ; 
+: Recurse
+     ; 
+
+Word: NoIntpComp
+
+Text: NoIntpComp
+The target program normally does not need an interpreter nor a
+compiler. We can interpret the target from the host and change the code
+as well. Therefore Holon does not provide these ANS-Forth words:    
+     
+     ABORT  ABORT"  QUIT  FIND  SOURCE  STATE  EVALUATE  
+     
+Of course, these words can be added to the system, if you wish to build
+complete Forth systems. 
+

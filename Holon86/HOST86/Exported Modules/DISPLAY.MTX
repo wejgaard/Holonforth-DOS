@@ -1,0 +1,960 @@
+Module: Display
+
+Group: Rahmenmasse
+
+Word: y1
+
+\ Oberer Rand 
+0 constant y1 
+
+Word: y2
+
+\ Kommentarlinie 
+6 integer y2 
+
+Word: y3
+
+\ Definitionslinie 
+9 integer y3 
+
+Word: y4
+
+\ Stacklinie 
+21 integer y4 
+
+Word: y5
+
+\ Unterer Rand 
+23 integer y5 
+
+Word: x1
+
+\ Linker Ramd 
+0 constant x1 
+
+Word: x2
+
+\ Modul / Gruppe 
+23 constant x2 
+
+Word: x3
+
+\ Gruppe / Wort 
+46 constant x3 
+
+Word: x4
+
+\ Rechter Rand 
+79 constant x4 
+
+Word: x5
+
+\ Stackgrenze 
+10 constant x5 
+
+Word: WorkY2
+
+\ Speichern aktuelle y2,y3 bei Eintritt in Info und Help. Y2,3 werden bei
+\ Ende von Info/Help damit zurÅckgesetzt. 
+0 integer WorkY2 
+
+Word: WorkY3
+
+0 integer WorkY3 
+
+Group: Rahmenzeichen
+
+Word: .EOM
+
+209 xySign .EOM 
+
+Word: .EOEM
+
+194 xySign .EOEM 
+
+Word: .EOR
+
+184 xySign .EOR 
+
+Word: .EOER
+
+191 xySign .EOER 
+
+Word: .EOL
+
+213 xySign .EOL 
+
+Word: .EOEL
+
+218 xySign .EOEL 
+
+Word: .EUM
+
+207 xySign .EUM 
+
+Word: .EUEM
+
+193 xySign .EUEM 
+
+Word: .EUL
+
+212 xySign .EUL 
+
+Word: .EUEL
+
+192 xySign .EUEL 
+
+Word: .EUR
+
+190 xySign .EUR 
+
+Word: .EUER
+
+217 xySign .EUER 
+
+Word: .LEM
+
+198 xySign .LEM 
+
+Word: .ELEM
+
+195 xySign .ELEM 
+
+Word: .REM
+
+181 xySign .REM 
+
+Word: .EREM
+
+180 xySign .EREM 
+
+Word: .|
+
+179 xySign .| 
+
+Word: .||
+
+186 xySign .|| 
+
+Group: TheWindow
+
+Word: TheWindow
+
+\ EnthÑlt die Masse des aktuellen Fensters: x0,y0,x1,y1,breite,hîhe 
+create TheWindow   6 allot 
+
+Word: Fensterbreite
+
+: Fensterbreite   ( -- n )
+     theWindow 4 + c@  ; 
+
+Word: Fensterhîhe
+
+: Fensterhîhe   ( -- n )
+     theWindow 5 + c@  ; 
+
+Word: wCorners
+
+\ Reihenfolge fÅr ClrTxt. 
+: wCorners   ( -- left upper right lower )
+     theWindow >r 
+     r@ c@  r@ 1+ c@  r@ 2+ c@  r> 3 + c@  ; 
+
+Word: wxy
+
+\ Cursor relativ zu Window setzen 
+: wxy   ( x y -- )
+     join theWindow @ + split xy  ; 
+
+Word: @wxy
+
+\ Cursor lesen relativ zu Fensterursprung 
+: @wxy   ( -- x y )
+     @xy theWindow @ split d-  ; 
+
+Word: dowxy"
+
+\ [<<,">> muss im doWort sein - nicht in tieferem Wort, da es mit dem
+\ rStack spielt.] 
+: dowxy"
+     wxy <<,">> "type  ; 
+
+Word: wxy"
+
+\ Verwendet als  3 4 wxy" Windowtext" 
+Compiler: wxy"   ( text" / -- )
+    Intp: NoIntp  ;
+    Comp: Code,  Here compile,  ,"  ;
+    Code: dowxy" 
+
+Word: wipe
+
+: wipe
+     wCorners ClrTxt  0 0 wxy  ; 
+
+Word: SetW&H
+
+: SetW&H
+     theWindow >r
+     r@ 2+  c@  r@    c@ - 1+  r@ 4 + c!   \ Breite
+     r@ 3 + c@  r@ 1+ c@ - 1+  r> 5 + c!   \ Hîhe
+     ; 
+
+Word: wActivate
+
+: wActivate   ( obj -- )
+     theWindow 4 move  SetW&H     ; 
+
+Word: wSet
+
+: wSet   ( upper left lower right obj -- )
+     dup>r 2+ c!  r@ 3 + c!  r@ c!  r> 1+ c!  ; 
+
+Word: wLinks
+
+\ Linke Grenze neu setzen 
+: wLinks   ( u obj -- )
+     c!  ; 
+
+Word: wOben
+
+: wOben   ( u obj -- )
+     1+ c!  ; 
+
+Word: wRechts
+
+: wRechts   ( u obj -- )
+     2+ c!  ; 
+
+Word: wUnten
+
+: wUnten   ( u obj -- )
+     3 + c!  ; 
+
+Word: istLinks
+
+Message: istLinks 
+
+Word: istOben
+
+Message: istOben 
+
+Word: istRechts
+
+Message: istRechts 
+
+Word: istUnten
+
+Message: istUnten 
+
+Word: Window
+
+\ Koordinaten werden so abgelegt, dass die Endpunkte als Integer
+\ ausgelesen werden kînnen (2Bytes, xy)
+\ Array: | x0 | y0 | x1 | y1 |  ==  | links | oben | rechts | unten | 
+ObjectType: Window    ( y0 x0 y1 x1 -- )
+      Data: rot byte,                   \ x0 links
+            rot byte,                   \ y0 oben
+            byte,                       \ x1 rechts
+            byte,                       \ y1 unten
+   Methods: wActivate wSet  wLinks   wOben   wRechts   wUnten   
+  Messages: init      put   istLinks istOben istRechts istUnten 
+
+Group: Rahmen
+
+Word: -Line
+
+: -Line   ( y x1 x2 -- )
+     over - -rot swap xy 0 ?do 196 emit loop  ; 
+
+Word: --Linie
+
+: --Linie   ( y -- )
+     dup x1 x4 -Line  x1 over .ELEM  x4 swap .EREM  ; 
+
+Word: LeerLinie
+
+: LeerLinie   ( y -- )
+     x1 over xy  x4 x1 - spaces  x1 over .|  x4 swap .|  ; 
+
+Word: |Spalte
+
+: |Spalte  ( y1 y2 x )
+     -rot swap ?do dup i xy 179 emit loop drop  ; 
+
+Word: .-
+
+: .-   ( n -- )
+     0 do 196 emit loop  ; 
+
+Word: >help
+
+\ grey on dark blue 
+$07 $1 AttributeType >help 
+
+Word: >rahmen
+
+\ light blue on dark blue 
+$07 $1B AttributeType >rahmen 
+
+Word: GrundRahmen
+
+\ Variante mit Einzellinien - Test. 
+: GrundRahmen
+     page  y1 x1 x4 -Line
+     y1 y5 x1 |Spalte  x1 y1 .EOEL 
+     y1 y5 x4 |Spalte  x4 y1 .EOER  
+     y1 y2 x2 |Spalte  x2 y1 .EOEM   
+     y1 y2 x3 |Spalte  x3 y1 .EOEM   
+     y5 x1 x4 -Line    x1 y5 .EUEL  x4 y5 .EUER  ; 
+
+Word: Rahmen
+
+\ Variante mit Einzellinien - Test. 69c 
+: Rahmen
+     GrundRahmen  Help? NoStack? or
+     if   y2 --Linie  x2 y2 .EUEM  x3 y2 .EUEM  y2 3 + --Linie
+     else y2 --Linie  x2 y2 .EUEM  x3 y2 .EUEM  
+          y3 --Linie 
+          y4 --Linie 
+     then  ; 
+
+Word: HelpSchrift
+
+: HelpSchrift
+     x1 2+ y1 xy ." CHAPTER"
+     x2 2+ y1 xy ." SECTION"
+     x3 2+ y1 xy ." PARAGRAPH"
+     x4 7 - y5 xy ." MANUAL"  ; 
+
+Word: GrundSchrift
+
+\ Neue Beschriftung 699 35-14 
+: GrundSchrift
+     x1 2+ y1 xy ." MODULE"
+     x2 2+ y1 xy ." GROUP"
+     x3 2+ y1 xy ." WORD"
+     x4 ProgName c@ 1+ - y5 xy ProgName "type  ; 
+
+Word: .TargetMonitor
+
+\ Optionale Anzeige des aktuellen Targetmonitors. 65g 33-20 
+Doer .TargetMonitor 
+
+Word: WorkSchrift
+
+\ 65g .TargetMonitor 33-20  TEXT 35-14 6ab-1 NoStack? 
+: WorkSchrift
+     GrundSchrift  
+     x1 2+ y2 xy ." TEXT"
+     micro? NoStack? 0= and
+     if x1 2+ y4 xy ." STACK" .Targetmonitor  then  ; 
+
+Word: Schrift
+
+\ 6ab-1 NoStack? 
+: Schrift
+     Help? if HelpSchrift else WorkSchrift then  ; 
+
+Group: Windows
+
+Word: ModulFenster
+
+y1 1+ x1 1+ y2 1- x2 1-  Window ModulFenster 
+
+Word: GruppeFenster
+
+y1 1+ x2 1+ y2 1-  x3 1- Window GruppeFenster 
+
+Word: WortFenster
+
+y1 1+ x3 1+ y2 1-  x4 1- Window WortFenster 
+
+Word: DefFenster
+
+y3 1+ x1 7 + y4 1-  x4 1- Window DefFenster 
+
+Word: ComFenster
+
+y2 1+ x1 7 + y3 1-  x4 1- Window ComFenster 
+
+Word: MakroBild
+
+\ 6ab-3 Einzellinien. 
+: MakroBild
+     y5 is y2  clear micro?   
+     y1 1+ x1 1+  y2 1-  x2 1- put ModulFenster
+     y1 1+ x2 1+  y2 1-  x3 1- put GruppeFenster
+     y1 1+ x3 1+  y2 1-  x4 1- put WortFenster 
+     >rahmen GrundRahmen x2 y5 .EUEM  x3 y5 .EUEM 
+     Help? if HelpSchrift else GrundSchrift then normal  ; 
+
+Word: MikroBild
+
+: MikroBild
+     6 is y2   set micro?
+     y1 1+ x1 1+  y2 1-  x2 1- put ModulFenster
+     y1 1+ x2 1+  y2 1-  x3 1- put GruppeFenster
+     y1 1+ x3 1+  y2 1-  x4 1- put WortFenster 
+     >rahmen Rahmen Schrift normal  ; 
+
+Word: StackLinie
+
+\ 6ab-3 Einzellinien 
+: StackLinie
+     >rahmen y4 --Linie  x1 2+ y4 xy ." STACK" normal   ; 
+
+Word: StackWindow
+
+: StackWindow
+     y4 1- istUnten DefFenster  StackLinie  ; 
+
+Word: NoStackWindow
+
+: NoStackWindow
+     y5 1- istUnten DefFenster 
+     >rahmen y4 Leerlinie  y4 1+ Leerlinie normal  ; 
+
+Word: PntSetupFenster
+
+4 8 20 71 Window PntSetupFenster 
+
+Word: AboutFenster
+
+3 7 20 72 Window AboutFenster 
+
+Word: yo
+
+0 integer yo 
+
+Word: yu
+
+0 integer yu 
+
+Word: xl
+
+0 integer xl 
+
+Word: xr
+
+0 integer xr 
+
+Word: FensterRahmen
+
+\ Zeichnet Rahmen um aktuelles Fenster. 6ab-3 Einzellinien. 
+: FensterRahmen
+     >rahmen wipe 
+     wCorners  is yu  is xr  is yo  is xl
+     yo xl xr -Line  yu xl xr -Line  
+     yo yu xl |Spalte  yo yu xr |Spalte
+     xl yo .EOEL  xr yo .EOER  xl yu .EUEL  xr yu .EUER  
+    normal  ; 
+
+Word: InitY234
+
+\ Es kann nicht schaden, die Bildlinien zurÅcksetzen zu kînnen, falls im
+\ Ablauf etwas schief geht. Neustart oder CtlSft+F8 helfen dem User. 
+: InitY234
+     6 is y2  9 is y3  21 is y4  
+     y2 1+ istOben ComFenster
+     y3 1- istUnten Comfenster
+     y3 1+ istOben Deffenster
+     y4 1- istUnten Deffenster  ; 
+
+Word: mgDisplay
+
+\ FÅr Modul- und Gruppentext im Deffenster erste Zeile reservieren. 4.014 
+: mgDisplay
+\     Deffenster wipe
+     y3 2+ istOben Deffenster  ; 
+
+Word: WortDisplay
+
+\ Deffenster normal setzen fÅr Worttext. 4.014 
+: WortDisplay
+     y3 1+ istOben Deffenster  ; 
+
+Word: WipeText
+
+\ 4.072 Kosmetik 
+: WipeText
+     DefFenster wipe ComFenster wipe  ; 
+
+Group: Text&Titel
+
+Word: xyMTitel
+
+: xyMTitel
+     35 y5 xy >rahmen  ; 
+
+Word: MenuTitel
+
+\ 4.091 Test: ohne Menutitel 
+: MenuTitel   ( "adr -- )
+\     xyMTitel "type normal  ; 
+     drop normal  ; 
+
+Word: ClrMenuTitel
+
+: ClrMenuTitel
+     xyMTitel 15 .- normal  ; 
+
+Word: WordTitel
+
+: WordTitel   ( "adr -- )
+     x1 2+ y2 xy >rahmen "type 5 .- normal  ; 
+
+Word: WindowText:
+
+\ Bildet Buffer name, der den ganzen folgenden Text der Definition
+\ speichert zusammen mit der TextlÑnge als 16Bit Zahl vor dem Text.
+\ Liefert Adresse von Text bei AusfÅhrung. 
+Compiler: WindowText:   ( name / -- )
+    Intp: SkipName CallCode, StoreText EndDef  ;
+    Comp: NoComp ;
+    Code: doVar 
+
+Word: xyUDM
+
+\ Setzt Cursor an die Update Marke. 
+: xyUDM   
+     79 23 xy >rahmen  ; 
+
+Word: SetUpdateMarke
+
+\ 6ab-3 Einfache Ecke, hell. 
+: SetUpdateMarke
+     xyUDM bold 217 emit normal  ; 
+
+Word: ClearUpdateMarke
+
+\ 6ab-3 Einfache Ecke. 
+: ClearUpdateMarke
+     xyUDM 217 emit normal  ; 
+
+Group: WriteLine
+
+Word: LineMax
+
+\ Maximale Anzhl Zeichen_plus_Attribut Bytes in Linebuf. 
+160 constant LineMax 
+
+Word: LineBuf
+
+\ Puffer fÅr zeilenweises Schreiben auf den Bildschirn.  Die BIOS Routine
+\ arbeitet zeilenweise viel schneller. 
+create LineBuf   LineMax allot 
+
+Word: .Line
+
+\ Schreibt eine Zeile in das altuelle Fenster. Linke obere Ecke und
+\ Fensterbreite werden aus dem Window-Array geholt. 
+Code .Line   ( y -- )
+     pop bx  add bl, theWindow 1+ byte            \ y0+y
+     mov dh, bl  mov dl, theWindow byte           \ x0
+     mov cl, theWindow 4 + byte   mov ch, # 0     \ Fensterbreite
+     push es  
+     mov di, ds  mov es, di  mov di, bp  mov bp, # LineBuf
+     mov ax, # $1302  int $10
+     mov bp, di  pop es  next 
+
+Word: linePos
+
+\ Position in Linebuf, in Zweierschritten wegen Attribut 
+0 integer linePos 
+
+Word: lEmit
+
+\ 51g Neu in Code (Unterschied im Display nicht spÅrbar)
+\ Schreibt c mit aktuellem attribute in Linebuf zu Offset LinePos
+\ (begrenzt auf LineMax-2) und inkrementiert LinePos. 
+Code lEmit   ( c -- )
+     pop ax  mov ah, adr Attribute byte
+     mov bx, adr LinePos  cmp bx, # LineMax 2-
+     > if  mov bx, # LineMax 2-  then
+     add bx, # LineBuf  mov 0 [bx], ax
+     mov cx, adr LinePos  inc cx  inc cx  mov adr linePos cx
+     next 
+
+Word: lSpace
+
+: lSpace
+     2 add linePos  ; 
+
+Word: lType
+
+\ Schreibt String in Linebuf zu Offset LinePos mit aktuellem Attribut 
+: lType   ( "adr n -- )
+     0 ?do dup c@ lEmit 1+ loop drop  ; 
+
+Word: ld.
+
+\ Schreibt Zahl d als hex in Linebuf in Feld der Breite n, die Zahl wird
+\ begrenzt auf 6 Stellen. 
+: ld.   ( d n -- )
+     >r theBase hex -rot  
+     <# #s #> dup 6 > if 6 swap - - 6 then \ vordere Stellen weglassen
+     r> over - 2* add linePos lType 
+     is theBase  ; 
+
+Word: lu.
+
+\ Schreibt Zahl u als hex in Linebuf in Feld der Breite n 
+: lu.   ( u n -- )
+     0 swap ld.  ; 
+
+Word: .l##
+
+: .l##   ( n -- )
+     0 <# # # #> lType  ; 
+
+Word: NormalLine
+
+create NormalLine   Linemax allot 
+
+Word: BoldLine
+
+create BoldLine   Linemax allot 
+
+Word: InverseLine
+
+create InverseLine   Linemax allot 
+
+Word: InitLine
+
+\ FÅllt linebuf mit c bei aktuallem attribute 
+: InitLine   ( c buf -- )
+     linemax 2/ 0 do  2dup c! 1+ attribute over c! 1+ loop 2drop  ; 
+
+Word: InitLines
+
+: InitLines
+     bold    'bl BoldLine    InitLine
+     inverse 'bl InverseLine Initline 
+     normal  'bl NormalLine  InitLine  ; 
+
+Word: >Inverse
+
+: >Inverse
+     inverse InverseLine LineBuf linemax move  0 is linePos  ; 
+
+Word: >Normal
+
+: >Normal
+     Normal NormalLine LineBuf linemax move  0 is linePos  ; 
+
+Word: >Bold
+
+: >Bold
+     bold BoldLine LineBuf linemax move  0 is linePos  ; 
+
+Group: EditLine
+
+Zeileneditor zum Editieren von Strings. 
+
+Word: xy0
+
+\ Speichert Anfangs-Cursorposition bei Eingaben 
+0.0 double xy0 
+
+Word: $.Cur
+
+\ Cursor an Position i=1,.. in Feld setzen (bezÅglich xy0) 
+: $.Cur   ( i -- )
+     1- 0 xy0 d+ xy  ; 
+
+Word: Insert(i)
+
+\ Zeichen c bei Position i {1,..} einsetzen, Count und i erhîhen.
+\ [Die aktuelle Position wird auf dem Stack gefÅhrt in Eingaberoutine.] 
+: Insert(i)   ( i c -- i )
+     swap >r "adr r@ + dup dup 1+  "feld r@ - move  c!
+     "len 1+ "feld min "adr c! 
+     r> 1+  ; 
+
+Word: Delete(i)
+
+\ Zeichen bei Pos i {1,..} lîschen, wenn Pos im aktuellen String. Rest
+\ vorschieben und Space am Ende anfÅgen. 
+: Delete(i)   ( i -- i )
+     dup "len >  "len 0= or if exit then
+     >r  "adr r@ +   
+     dup 1+ swap "feld r@ - move 
+     'bl "adr "feld + c!
+     "len 1- "feld min "adr c!
+     r>  ; 
+
+Word: $trim
+
+\ Hintere Leerzeichen abschneiden 
+: $trim  
+     begin  "adr "len + c@ 'bl =
+     while  "len 1- 0 max "adr c!
+     repeat  ; 
+
+Word: $Show
+
+\ Aktuellem String im ganzen Feld zeigen 
+: $Show
+     1 $.cur "adr 1+ "feld type  ; 
+
+Word: $ende?
+
+\ Lokales Flag fÅr Ende von EditLine-Routine 
+0 integer $ende? 
+
+Word: editChar
+
+: editChar   ( i c -- i )
+     case 
+     'Esc of PSeq?
+             if   27 Insert(i)
+             else true is Ende? true is $ende? 
+             then endof
+     'cr  of true is $ende? endof
+     'Bsp of 1- Delete(i) endof
+     ^Y   of "blank drop 1 endof          \ 4.131
+     Insert(i) endcase  ; 
+
+Word: SpecialFunc
+
+\ Die Funktionstasten werden verschieden beutzt in verschiedenen Modi.
+\ Wir unterscheiden Normal (ohne FKey), Browser-, Find- und Testmodus. 
+Doer SpecialFunc 
+
+Word: BrowserFunc
+
+\ Spezialfunktionen bei Editline im Browsermodus. 4.080
+\ 4.030 mit F2 vom Namen in den Text. 
+: BrowserFunc   ( c -- )
+     case
+     F2 of set Ende? set $ende? ?edit endof       \ 4.030
+     drop endcase  ; 
+
+Word: InitSpecFunc
+
+( InitSpecFunc )    
+     make SpecialFunc BrowserFunc 
+
+Word: editFunc
+
+: editFunc   ( i c -- i )
+     case
+     'Del of Delete(i) endof
+     'left of 1- endof
+     'right of 1+ endof
+     'home of drop 1 endof
+     'end of drop "len 1+ endof
+     F8 of true is Ende? true is $ende? endof  
+     SpecialFunc endcase  ; 
+
+Word: EditKey
+
+\ Normalerweise identisch mit key. Ausnahme Testmode: Editkey muss auch
+\ Monitortest u.a. machen- 
+Doer EditKey 
+
+Word: setEditKey
+
+( setEditKey )
+     make EditKey key 
+
+Word: EditString
+
+\ Editiert String obj in ganzer LÑnge (gleich Feld) 
+: EditString   ( obj -- )  
+     is "obj  @xy is xy0   
+     false is $ende?  1 
+     begin     CurOff $Show dup $.Cur CurOn  
+               editkey ?dup         
+               if   EditChar 
+               else EditFunc
+               then $ende? 
+                    if CurOff $trim "len 1+ $.cur drop exit then
+               1 max "len 1+ "feld min min
+     again  ; 
+
+Word: set"Edit
+
+( set"Edit )
+     make "Edit EditString 
+
+Group: ShowStack
+
+Word: xys
+
+\ Cursor an Pos. x in Stackfenster setzen 
+: xys   ( x -- )
+     22 xy  ; 
+
+Word: .Base
+
+\ Zeigt aktuelle Basis. 
+: .Base
+     theBase  2 xys ." base="  dup 
+     decimal 0 <# #s #> type dup is theBase 
+     10 < if space then  ; 
+
+Word: .MonitorStatus
+
+: .MonitorStatus
+     micro? 
+     if   70 y5 1- xy Monitor? if 7 spaces else ." offline" then  
+     then  ; 
+
+Word: Signed?
+
+0 integer Signed? 
+
+Word: (s.)
+
+\ Zahl n fÅr type formatieren. 
+: (s.)   ( n -- adr m )
+     signed? if (.) else 0 (d.) then  ; 
+
+Word: (sd.)
+
+\ Zahl d fÅr type formatieren. 
+: (sd.)   ( d -- adr m )
+     signed? if (d.) else (ud.) then  ; 
+
+Word: xs
+
+\ Zwischenspeicher. 
+0 integer xs 
+
+Word: .Stack16
+
+\ Stackinhalt zeigen fÅr ein 16 Bit Zielsystem. 
+: .Stack16                                                  \ 4.230
+     depth 0                            
+     do   i pick (s.)  xs over - 2- dup 13 < 
+          if   3drop xs 3 - xys ." .." leave 
+          else is xs  xs xys type 
+               Bytes? i 0= and if ." b" then
+          then 
+     loop  ; 
+
+Word: TOS16?
+
+\ 16 Bit Eintrag auf TOS in 32 Bit Target? 
+Flag TOS16?                                                 \ 4.230 
+
+Word: .Stack32
+
+\ Stackinhalt zeigen in 32 Bit System. Wenn depth ungerade ist, zeigen
+\ wir TOS als eine 16 Bit Zahl mit "w"=word. 
+: .Stack32                                                  \ 4.230
+     depth 1 and is TOS16?
+     depth 0                            
+     do   i 0= TOS16? and 
+          if 0 pick (s.) else i 1+ pick i 1+ pick (sd.) then
+          xs over - 2- dup 13 < 
+          if   3drop xs 3 - xys ." .." leave 
+          else is xs  xs xys type 
+               i 0= TOS16? and if ." w" 1 else 2 then
+          then 
+     +loop  ; 
+
+Word: .Stack
+
+\ Stackanzeige auffrischen. 
+: .Stack
+     Help? NoStack? or Micro? 0= or ?exit  
+     .base 69 spaces  
+     debug? if 40 else .MonitorStatus 66 then is xs  
+     xs xys ." --" 
+     depth if 32? if .Stack32 else .Stack16 then then  ;    \ 4.230 
+
+Group: Stackbefehle
+
+Word: ZahlTaste
+
+\ 5bu Speichert den Ascii Code der (eventuellen) Zahl. FÅr die Uebernahme
+\ in den Zahlstring. 
+0 integer ZahlTaste 
+
+Word: Ziffer1?
+
+\ 5bn True, wenn die Stackeingabe durch eine Zahltaste begonnen wird.
+\ Dann sind wir schon bei Ziffer1 (sonst erst bei Ziffer0). 
+Flag Ziffer1? 
+
+Word: ZahlChar?
+
+\ 5bu Mit setzen von ZahlCode und Ziffer1?.
+\ 5bu '-' ist auch eine Zahl. 
+: ZahlChar?   ( c -- f )
+     dup is ZahlTaste 
+     dup 45 = swap theBase digit nip or
+     dup is Ziffer1?  ; 
+
+Word: Stack$
+
+" -12345678" String Stack$ 
+
+Word: StackKey
+
+\ Liefert als erstes Zeichen der Stackeingabe das Eintrittszeichen,
+\ spÑter die folgenden Eingaben. 5bn
+\ 5bu Zahltaste statt NewKey. 65t Buchstaben in UC wandeln. 33-34
+\ 4.027 Bei zweimal '-' Aussteigen mit simuliertem Escape. 
+: StackKey   ( -- c )
+     Ziffer1? if ZahlTaste clear Ziffer1? else key then 
+     dup ascii - =  "adr 1+ c@ ascii - = and if drop 'esc then  ; 
+
+Word: StackEingabe
+
+\ Erwartet Eingabe einer Zahl in aktueller Basis, akzeptiert auch Klein-
+\ buchstaben. Reklamiert bei ungÅltiger Eingabe und wartet erneut. LÑsst
+\ gÅltige Zahl oder endet ohne neuen Stackeintrag (Esc). [Verwertet auch
+\ die erste Zahl, mit der die Stackeingabe geîffnet wurde.] 
+: StackEingabe   ( -- n›d )
+     inverse clear Stack$  clear Ende?  
+     make EditKey StackKey  
+     begin     Debug? if 43 else 69 then xys edit Stack$
+               Ende? 
+               if normal make EditKey key  exit then
+               upcase Stack$  Stack$ Number? 0=
+     while     2drop 7 emit
+     repeat 16? if drop then normal  make EditKey key   
+     bytes? if swap join clear Bytes? then  ; 
+
+Word: ?StackEingabe
+
+\ Wenn c ein Zahlzeichen ist, wird die Stackeingabe gerufen [Mit diesem
+\ Zeichen beginnen ist nur mîglich, wenn wir es wieder in den Keybuffer
+\ stecken, sodass key es nochmal liefert]
+\ 5bu Ohne Set Ziffer1? (jetzt in ZahlChar?).
+\ 637 Bei Macro keine Stackeingabe. 6ab-1 NoStack? 
+: ?StackEingabe   ( c -- )
+     ZahlChar? Help? NoStack? or 0= and micro? and 
+     if StackEingabe .Stack  then  ; 
+
+Word: ChangeBase
+
+\ (Vorerst auf dez/hex beschrÑnken. Wenn andere Basen sollte Reihenfolge
+\ von aktueller Basis abhÑngen, PrioritÑt fÅr 10,16.) 
+: ChangeBase
+     theBase case
+     10 of 16 endof
+     drop 10 endcase is theBase  ; 
+
+Word: ?Stackbefehl
+
+\ Liefert c2=0, wenn c1 ein Stackbefehl ist, sonst c2=c1. Zeigt Stack
+\ nur, wenn ein Stackbefehl ausgefÅhrt wurde. 
+: ?Stackbefehl   ( c1 -- c2 )
+     0 >r case
+     32 ( alt+D) of depth if drop clear Bytes? then 
+                    depth 32? and if drop then endof
+     46 ( alt+C) of !sp clear Bytes? endof
+     47 ( alt+V) of Stackeingabe endof
+     48 ( alt+B) of ChangeBase endof
+     49 ( alt+N) of signed? 0= is signed? endof
+     50 ( alt+M) of Debug? if bytes? if false else $FF and true 
+                           then is bytes?  then  endof
+     33 ( alt+F) of bytes? 0= if flip then endof
+     r>drop exit endcase 
+     CurOff .Stack Test? if CurOn then  r>  ; 
+

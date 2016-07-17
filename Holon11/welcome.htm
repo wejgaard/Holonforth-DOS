@@ -1,0 +1,429 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<meta name="GENERATOR" content="Microsoft FrontPage 4.0">
+<title>Welcome to Holon 11</title>
+</head>
+
+<body>
+
+<p><font face="arial, helvetia" size="5">Welcome to Holon 11&nbsp;</font></p>
+
+<font
+face="arial, helvetia" size="2">
+
+<h4>Installation </h4>
+
+  <p>Store the files in one common directory.&nbsp;</p>
+
+  <h4>Files</h4>
+
+  <ul>
+    <li>HOLON11.EXE&nbsp; is the development environment (the host). </li>
+    <li>HOLON11.STR and HOLON11.TEX contain the source text of the target program. </li>
+    <li>HOLON11.COD&nbsp;contains a code image of the target program. </li>
+    <li>HOLONHLP.STR&nbsp;and HOLONHLP.TEX contain the online manual. </li>
+    <li>BOOTLOAD.COD&nbsp;is bootloaded into the 68HC11
+      in its special bootstrap mode&nbsp;<br>
+ (initially this file is a copy of IMON.IMG)&nbsp; </li>
+    <li>IMON.IMG&nbsp; --&nbsp; Monitor, operates in the internal RAM of the 68HC11 </li>
+    <li>PMON.IMG&nbsp; --&nbsp; Monitor, operates in the external program RAM at $FF00 ff</li>
+    <li>NOEEPROM.IMG&nbsp; --&nbsp; Sets CONFIG=$0C and thus disables the internal EEPROM.</li>
+  </ul>
+
+<h4>Start Holon</h4>
+
+<blockquote>
+  <p>Holon runs under DOS. When HOLON11 starts, the system looks for the files HOLON11.STR
+  and HOLON11.TEX in the<em> </em>working directory. HOLON11 shows the welcome screen.</p>
+</blockquote>
+
+<blockquote>
+  <blockquote>
+    <p><i>If you see an empty browser and the question: &quot;Create a new application?
+    Y/N&quot;, then HOLON11 has not found the program files .STR and .TEX, probably because
+    the working directory is not set to the Holon directory. Press N and restart Holon in a
+    different way.</i></p>
+  </blockquote>
+</blockquote>
+
+<h4>Get acquainted with the browser</h4>
+
+<blockquote>
+  <p>You see the source text of the target program in a browser, clearly structured into
+  modules, groups, and Forth words. In the central part you see the definition of the
+  current word and a comment in a separate pane. The stack pane at the bottom is used for interactive testing. </p>
+</blockquote>
+
+<blockquote>
+  <ul>
+    <li>Use the cursor keys to move around in the browser. </li>
+  </ul>
+</blockquote>
+
+<blockquote>
+  <p>Below the stack pane a&nbsp;function key menu is shown. <ul>
+    <li>Press the <em>Ctrl</em> key to see other commands, e.g. Ctrl+F4=Test (opens
+      a window for the classical Forth command line interpreter).</li>
+    <li>More functions are available with&nbsp;the <em>Alt</em> key and the <em>Ctrl+Sft</em>
+      key combination. </li>
+  </ul>
+</blockquote>
+
+<h4>Contact&nbsp; the Target</h4>
+
+<blockquote>
+  <p>Holon 11 is an &quot;umbilical&quot; development system. The host is meant to be in
+  contact (online) with a running target system. The umbilical method considerably speeds up
+  development. It provides instant response to all your actions.&nbsp;&nbsp;</p>
+  <p>The host controls the target via a tiny monitor, which occupies 200 bytes in the
+  target memory space. No emulator or other development hardware is needed. &nbsp; </p>
+
+<h5>Target Requirements:</h5>
+
+  <p>Holon 11 works with any&nbsp; 68HC11 board that has:</p>
+</blockquote>
+
+<blockquote>
+  <ul>
+    <li>8 MHz crystal = 2 MHz system clock. (Other clock rates are possible, see <a href="#baud">remarks</a>.)</li>
+    <li>Communication with RS232 conversion on the SCI port.&nbsp; </li>
+    <li>The ability to change between the &quot;normal expanded&quot; and &quot;special
+      bootstrap&quot; mode.&nbsp; </li>
+    <li> The TxD output of the 68HC11 (pin PD1) must be
+      terminated with a 10 kOhm resistor to VDD.&nbsp;<br>
+      (The internal bootroutine in the 68HC11 sets the
+      TxD line to open drain.) </li>
+  </ul>
+
+<h5><strong>Send the monitor to the target</strong>:</h5>
+
+  <ul>
+    <li>Connect the SCI port to a COM port on the host. </li>
+    <li>If you are not using COM1, change the COM port in the system setup: Press Ctrl+Sft+F3,
+      and then press the space bar until the correct COM port number shows. Exit with &lt;Esc&gt;.</li>
+  </ul>
+  <blockquote>
+    <p><img src="welcome.gif" alt="System setup" width="492" height="231"></p>
+  </blockquote>
+  <ul>
+    <li>Set the 68HC11 into &quot;special bootstrap&quot; mode.&nbsp;</li>
+    <li>Press Ctrl+Sft+F6=Bootload to start the bootload sequence. The host now waits for the
+      target.</li>
+    <li>Press the reset button on the target (or generate a reset otherwise). The target
+      sends a RS232 break signal to the host. </li>
+    <li>When the host receives the break signal, it downloads the contents of the file
+      BOOTLOAD.COD,&nbsp; and displays the progress of the transmission. </li>
+    <li>The file BOOTLOAD.COD initially contains the monitor <b>IMON</b>, which installs itself and starts
+      communication. You should see the blinking dot at the lower right corner now.&nbsp; </li>
+  </ul>
+
+<h5><strong>Remarks</strong>:</h5>
+
+  <ul>
+    <li>You find initial information about the monitors in the online manual
+      (press F1). For detailed information about all available monitors see the application note <a href="http://holonforth.com/tools/notes/an11-2.htm">Holon
+      11 monitors</a>. </li>
+    <li>Holon 11 is set up for 9600 baud communication during development and 1200 baud for
+      bootloading, which corresponds to a 2 MHz system clock in the 68HC11. </li>
+    <li><a name="baud"></a><em>Other baud rates and system clocks are possible</em>. You can set
+      the baud rate of Holon 11 to any value that is supported by the PC's COM port. However, if
+      you choose a different 68HC11 system clock, the baud rate division factor in the target
+      monitor will probably need to be changed. Licensed users of Holon 11 receive the source
+      code of the monitors and can adapt a monitor to special cases. </li>
+    <li>Although the SCI port is used for communication with the monitor, you
+      can still use it for the application program, as demonstrated in the tutorial Using
+      Holon.&nbsp;&nbsp;&nbsp;&nbsp; </li>
+  </ul>
+</blockquote>
+
+<h4>First steps in the target</h4>
+
+<blockquote>
+
+<p>Now that host and target communicate, load code into the target and have
+some fun.</p>
+
+<h5>Setup ROM and RAM space according to your target board </h5>
+  <p>The first words in the browser set up the memory spaces: SetROM and
+  SetRAM in system module Basis. Adapt the values to the memory spaces of
+  your target board:&nbsp; </p>
+  <p> Press Ctrl+Home to move to the start of the program. Go to
+  the word SetROM, if you are not already there, and press F2=Edit. Change the
+  memory values in SetROM. Press Ctrl+PgDn and change the memory values in
+  SetRAM. Press &lt;Esc&gt; to exit the Text window.&nbsp;&nbsp; </p>
+
+  <h5>Load the program</h5>
+
+  <p>Press Ctrl+F2=InitCode, then press Ctrl+F3=LoadAll. Holon11 clears the code
+  space and sets up the internal pointers, then it loads the program
+  sequentially starting with the first word in the browser. Watch the progress
+  in the browser: Holon11 marks the currently loaded group.&nbsp;</p>
+
+  <h5>Test a word</h5>
+
+<p>Test the simple word <b>dup</b>.&nbsp;</font>&nbsp;&nbsp; <font
+face="arial, helvetia" size="2">-- <i>If <b>dup</b>  works, the whole system
+works. --&nbsp;&nbsp;</i></font> <font
+face="arial, helvetia" size="2">Use the direct access method to go to <b>dup</b>:
+  press the space bar and type&nbsp; d u p . This brings you to the word.</p>
+
+<p>You need a number on the stack as an argument for <b>dup</b>. Type a number, say: 77. The first digit opens
+  the stack entry field. Press &lt;Enter&gt; to finish the entry.&nbsp;</p>
+
+<p>Now execute <b>dup</b>: Press F4=Run. If all is well, you see your number
+  duplicated on the stack. -- The number was sent to the target, the word was
+  executed, and the target stack was again sent to the
+  host.&nbsp;</p>
+
+<p>Testing a simple word builds confidence. You see immediately in the stack
+window, whether the word - and the system - works. The stack shows the
+result.&nbsp;</p>
+
+<p>If there is a problem, you might like to look into the code and watch its action step by
+step? Let's do it.</p>
+
+  <h5>Step through <i>dup</i></h5>
+
+<p>Press Alt+F4=Debug. Holon11 shows the
+  current values of the CPU registers and marks the first step in the
+  definition. If the stack window has base=10 (decimal), press Alt+B and change to&nbsp;
+hexadecimal.&nbsp;</p>
+
+  <p>Press F4 to execute the first step. Check the X register and see the action
+  of PULX, the first instruction in <b>dup</b>. Press F4 again and watch the stack.
+  Continue until the end.&nbsp;</p>
+
+<p>Note that you stay in the comfort of the browser even while debugging. I like
+immediate access to my application program in all details, and that's what Holon
+provides me.&nbsp;</p>
+
+  <h5>Have a look at the code</h5>
+
+<p>If the debugger points out a problem, a look at the generated binary code in
+memory might help.</p>
+
+  <p>Press F6=Code and look into the program code. If the code window is marked
+  &quot;DATA&quot;, press F6 once more for &quot;PROG&quot;.&nbsp;</p>
+
+  <p>If the code lines start with F, you are watching the memory
+  image in the <i> code file</i>. Press T to see the code in the target memory. If the memory content is
+  displayed normally (white on blue), the code in the target is equal to the
+  code in the file. Code that is marked (yellow on magenta) differs between file and target.&nbsp;</p>
+
+<p>Check the code of <b>dup</b>. The code is framed in yellow brackets {}.
+You should recognize the opcodes in the definition of <b>dup</b>.</p>
+
+  <blockquote>
+    <p><i>If the code in the target is incorrect, try and load the program
+    again. If </i><i>all code is wrong, there is a memory addressing problem. This can happen with the
+    68HC11F1, if your board uses unconventional chip selects. See the
+    application note <a href="http://holonforth.com/tools/notes/an11-2.htm">Holon
+      11 monitors</a>.&nbsp;</i></p>
+
+  </blockquote>
+
+<h5>Test a high-level word</h5>
+
+<p>Go to the word<b> m*</b>&nbsp; ('m-star') and read about its function. Enter two numbers on
+the stack and execute the word.&nbsp;</p>
+
+<p>The result is a 32 bit double number. The stack window displays the double number as
+separate high and low 16 bit values.&nbsp;</p>
+
+<p>Have a good look at the definition of <b>m*</b>: Enter the editor (press F2
+or &lt;Enter&gt;), put the cursor
+on &quot;2dup&quot; and press F7=GoLook. Holon takes you to the definition of <b>2dup</b>.
+Go back with F8 and look up other words in the definition. In this particular
+case all words in <b> m*</b> are code words, however, the words in the definition can be
+any type. You see here the principle of Forth: All existing words can be used to
+create new &quot;high-level&quot; words.&nbsp;I call them <i>colon</i> words,
+since high-level Forth words are defined with an initial ':' .</p>
+
+<h5>Step trough <i>m*</i></h5>
+
+<p>Let's have a very close look at the action of <b>m*</b> and explore the
+debugger a little more..</p>
+
+<p> From the
+previous test there should still be two numbers on the stack, otherwise please
+supply two nice values for the test. Press Alt+F4=Debug and check the stack window.
+Since you are now testing a colon word, the CPU registers are
+replaced by the contents of the return stack, which is of more interest here.&nbsp;</p>
+
+<blockquote>
+  <p><i>The word is called by the Forth machine (the &quot;inner
+  interpreter&quot;). The Forth machine first stores the current instruction pointer
+  on the return stack, and then passes control to the colon word. The final <b>;</b>
+  (semicolon) in the word retrieves the instruction pointer from the
+  return stack and returns control.&nbsp;</i></p>
+
+</blockquote>
+<p>See the instruction pointer of the calling word on the return stack. Step and observe the action.&nbsp;</p>
+
+<p>Step to the word <b>swap</b>, press F3=GoSub and have a look at the
+definition of <b>swap</b>. The browser jumps to the word <b>swap</b> and
+lets you continue execution through its code. The CPU registers are displayed,
+because <b>swap</b> is a code word.&nbsp;</p>
+
+<p>Step to the end of <b>swap</b> and see Holon return to the calling word <b>m*</b>.
+Press F6=run and let the execution continue until the end of the word.&nbsp;</p>
+
+<p>You can follow the execution of the program step-by-step through all
+subwords, even down through the Forth machine, the word <b>next</b>. Holon gives
+you control of every detail of your programs. You can understand every byte in
+the target, and remember: <i>A fully understood program has no bugs!</i></p>
+
+<p>If everything worked as intended, you should
+now have a good feeling for the browser and for the ways that you can handle and test
+your program. There are a couple more features to explore. The online manual
+(F1=Help) has all the information.&nbsp;</p>
+
+<p>&nbsp;</p>
+
+</blockquote>
+
+<h4>See some action on your board</h4>
+
+</font>
+
+<blockquote>
+
+<font
+face="arial, helvetia" size="2"><p>How about a little action in the target? Let's assume that you have a
+<i> LED connected to
+pin PA6 (portA, bit 6).&nbsp;</i></p>
+
+<p> Now write a program to have the LED emit the morse signal
+&quot;SOS&quot;. You need words to turn the LED on, to turn the LED off, and to
+delay the execution.</p>
+
+<h5>Create a module for the test program</h5>
+
+<p>Go the last module, press Alt+F2=New, type the name of the module, say:
+&quot;Testing&quot;, press &lt;Enter&gt;.</p>
+
+<h5>Create a group for the LED words</h5>
+
+<p>Go to the empty group window. Press F2=New, enter the name of the group, say:
+&quot;LED driver&quot;.</p>
+
+<h5>Create a group for the action</h5>
+
+<p>Press Alt+F2=New, enter &quot;The Action&quot;.&nbsp;</p>
+
+<h5>Write the LED driver</h5>
+
+<p>Go back to the group <i>LED driver,</i> then go to the Word window. Press
+F2=New and define the word, which turns the LED on. You only want to change bit
+6.</p>
+
+<p>: LED-on&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; PORTA&nbsp; c@&nbsp; $40&nbsp;
+or&nbsp; PORTA c!&nbsp;&nbsp; ;</p>
+
+<p>Press F3=Load to exit the editor and load the word in one step. Then press
+F4=Run to test the word. The LED should light. There is not much that can go
+wrong. See the action of your word step by step in the debugger. Note what is
+written into PORTA. Check the hardware on your board.</p>
+
+<p>Now create a word that turns the LED off. Define and test:</p>
+
+<p>: LED-off&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; PORTA&nbsp; c@&nbsp; $BF
+and&nbsp;&nbsp; PORTA c!&nbsp;&nbsp; ;</p>
+
+<p>This ends the &quot;LED driver&quot;.&nbsp;</p>
+
+<blockquote>
+  <p><i>Note: Although it is very simple, the example shows the essence of writing
+  drivers for hardware in Forth. You build words that &quot;move&quot; the
+  hardware, and test the words immediately. This hands-on action keeps you in the
+  real world. You immediately learn if you know the
+  hardware well enough.&nbsp;</i></p>
+
+</blockquote>
+<h5>Write the action</h5>
+
+<p>Go to the group <i> The Action</i> and create the action words.</p>
+
+<p>We create the delay with a simple loop:</p>
+
+<p>: delay&nbsp;&nbsp; ( n -- )&nbsp;&nbsp;&nbsp; 0 do loop&nbsp; ;</p>
+
+<p>: pulse&nbsp;&nbsp; &nbsp;&nbsp; LED-on&nbsp; delay&nbsp; LED-off&nbsp; ;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; \ Loops n times</p>
+
+<p>: short&nbsp;&nbsp; 5000 pulse&nbsp; ;</p>
+
+<p>: long&nbsp;&nbsp; 15000 pulse&nbsp; ;</p>
+
+<p>: pause&nbsp; 5000 0 do loop&nbsp; ;</p>
+
+</font>
+<p><font
+face="arial, helvetia" size="2">Test the words. </font><font
+face="arial, helvetia" size="2">If ok, define the morse signals &quot;S&quot; and
+&quot;O&quot;.</p>
+
+<p>: S&nbsp;&nbsp;&nbsp; short pause short pause short pause&nbsp; ;</p>
+
+<p>: O&nbsp;&nbsp;&nbsp; long pause long pause long pause&nbsp; ;</p>
+
+<p>And create the final word, your application.</p>
+
+<p>: SOS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; S O S&nbsp; ;</p>
+
+  <h5>Note</h5>
+
+  <p>The LED driver is written in high-level Forth words, because this is
+  the simple way most of the time. If execution speed is important, substitute the words with assembler code.
+  Replace the previous definitions
+  by:</p>
+
+  <p>Code LED-on&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; LDX # PORTA&nbsp;&nbsp; BSET 0 ,x
+  $40&nbsp;&nbsp; NEXT<br>
+  Code LED-off&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; LDX # PORTA&nbsp;&nbsp; BCLR 0 ,x
+  $40&nbsp;&nbsp; NEXT</p>
+
+  <p>When you load the new words, Holon creates new code and exchanges the
+  code in the target memory. The old code is replaced, and the new code is
+  immediately active. <i> You don't have to reload all the application words,</i> the
+  application words use the new code already. -- Try it. Look up the memory and
+  check the code.</p>
+
+  <p>&nbsp;</p>
+
+</blockquote>
+
+<h4>Tutorial</h4>
+
+  <p>The tutorial <a href="http://holonforth.com/using/useholon.exe">Using Holon</a> 
+  is also offered an introduction to working with Holon 11. If you
+  have not downloaded it yet, please fetch it now. The tutorial presents the essential steps and
+  features of Holon 11. It guides you through the development of a small but real
+  application, complete with code ready for the EPROM. The application is included with the Holon 11 modules.
+  </p>
+
+<h4>Online Manual </h4>
+
+  <p>Press F1 to enter the <em>online manual</em>, which provides a detailed description of the operation
+  of Holon 11. <i>The manual can be printed</i>. Note the hints in the chapter <i>Setup</i>, section
+  <i>Printer</i>.</p>
+
+<h4>Forth</h4>
+
+  <p>If you are familiar with Forth you will feel at home rapidly. You can import your
+  existing Forth programs into Holon. Look up the details in chapter <i>Edit</i>, section
+  <i>Export/Import</i>.</font>&nbsp;&nbsp; <font
+face="arial, helvetia" size="2">If you are new to Forth, Holon makes it easy to adapt. Study the program and the system
+  modules. Try the Forth words. Every detail of the target system is clearly defined and
+  commented. Nothing is hidden in HolonForth.&nbsp;</font></p>
+<font
+face="arial, helvetia" size="2">
+
+
+<h4>Additional information</h4>
+  <a href="http://holonforth.com">http://holonforth.com</a>
+  <p>Copyright (c) 1995-2003 Wolf Wejgaard, All Rights Reserved.</p>
+  <p>&nbsp;</p>
+</body>
+</html>

@@ -1,0 +1,768 @@
+Module: Debug
+
+Group: Basics
+
+Word: tReturn
+
+0. double tReturn 
+
+Word: tGoCode
+
+0. double tGoCode 
+
+Word: tGoColon
+
+0. double tGoColon 
+
+Word: tDocol
+
+0. double tDocol 
+
+Word: tDoit
+
+0. double tDoit 
+
+Word: tDoDoes
+
+0. double tDoDoes 
+
+Word: tLeave
+
+0. double tLeave 
+
+Word: t?Leave
+
+0. double t?Leave 
+
+Word: =Return_
+
+:_ =Return_
+     ?>32 is tReturn  ; 
+
+Word: =GoCode_
+
+:_ =GoCode_
+     ?>32 is tGoCode  ; 
+
+Word: =GoColon_
+
+:_ =GoColon_
+     ?>32 is tGoColon  ; 
+
+Word: =DebugDocol_
+
+:_ =DebugDocol_
+     zStart is tDocol  ; 
+
+Word: =DebugDoit_
+
+:_ =DebugDoit_
+     zStart is tDoit  ; 
+
+Word: =DebugDoDoes_
+
+:_ =DebugDoDoes_
+     zStart is tDoDoes  ; 
+
+Word: =DebugLeave_
+
+:_ =DebugLeave_
+     zStart is tLeave  ; 
+
+Word: =Debug?Leave_
+
+:_ =Debug?Leave_
+     zStart is t?Leave  ; 
+
+Word: ip(step)
+
+\ Liefert Instruction Pointer (Colon) oder Program Counter (Code). 
+: ip(step)   ( -- ip )
+     iStep ip()  ; 
+
+Word: ip(step+1)
+
+: ip(step+1)   ( -- ip )
+     iStep 1+ ip()  ; 
+
+Word: >Break
+
+\ Den Targetcode dx1 durch einen Breakcode ersetzen (erstes Byte oder
+\ ganzes Wort). 
+Doer >Break   ( dx1 -- dx2 ) 
+
+Word: Destination
+
+\ Liefert die Destination des Sprungs bei tadr1. 
+Doer Destination   ( tadr1 -- tadr2 ) 
+
+Word: ReadXT
+
+\ Liest das Execution Token bei tadr. 
+Doer ReadXT   ( tadr -- xt ) 
+
+Word: SendXT
+
+\ Schreibt xt in Targetcode bei tadr. 
+Doer SendXT   ( xt tadr -- ) 
+
+Word: xt(step)
+
+\ Execution Token bzw. Opcode. 
+: xt(step)   ( -- xt )
+     ip(step) ReadXT  ; 
+
+Word: xt(step+1)
+
+: xt(step+1)   ( -- xt )
+     ip(step+1) ReadXT  ; 
+
+Word: Jsr?
+
+\ Ist Opcode bei tadr ein Subroutinencall? 
+Doer Jsr?   ( tadr -- f ) 
+
+Word: Jmp?
+
+\ Ist Opcode bei tadr ein Sprung? 
+Doer Jmp?   ( tadr -- f ) 
+
+Word: DoDoes?
+
+\ Ist das aktuelle Wort ein Create-Does Wort (Mutterwort)? 
+: DoDoes?   ( -- f )
+     zca 2dup jsr? 0= if 2drop false exit then
+     Destination tDodoes d=  ; 
+
+Word: Does?
+
+\ Ist aktuelles Wort ein Does-Wort (Kind eines Create-Does Wortes)? 
+: Does?   ( -- f )
+     zca 2dup jsr? 0= if 2drop false exit then
+     Destination 2dup jsr? 0= if 2drop false exit then
+     Destination tDodoes d=  ; 
+
+Word: =Colon?
+
+\ Ist xt ein Colonwort :: zeigt xt auf 'jsr docol'? 
+: =Colon?   ( xt -- f )
+     2dup jsr? -rot Destination tDocol d= and  ; 
+
+Word: Colon?
+
+\ true wenn ein Colonwort debugt wird (Aktivwort). Create-Does>
+\ Mutterwort gilt als Colonwort, Test = dodoes? 
+Doer Colon?   ( -- f ) 
+
+Word: AnfangsStep
+
+: AnfangsStep   ( -- m )
+     colon? if 1 else 0 then  ; 
+
+Word: GoSub?
+
+\ Zu Unterwort springen ist m”glich bei jedem Schritt in Colonwort und in
+\ Codeworten bei einem Subroutinenruf. 
+: GoSub?   ( -- f )
+     colon? dup 0=  ip(step) jsr? and  or  ; 
+
+Word: GoTo?
+
+\ Sind wir auf einer "jmp absAdr" Instruktion in einem Codewort? 
+: GoTo?   ( -- f )
+     colon? 0=  ip(step) jmp? and  ; 
+
+Word: ColonStep
+
+Doer ColonStep 
+
+Word: CodeStep
+
+Doer CodeStep 
+
+Word: DoStep
+
+\ Step 0 zeigt immer auf Code, Colonworte beginnen normal mit Step=1.
+\ [DoStep nicht als Vektor bilden, denn Colon- und Codestep werden
+\ einzeln in GoDown gebraucht.] 
+: DoStep
+     SendBase
+     colon? iStep 0> and if Colonstep else Codestep then 
+     ReadBase  ; 
+
+Group: Step
+
+Word: Tracing?
+
+\ Fr eine saubere MenuDarstellung. 
+Flag Tracing? 
+
+Word: DebugMenu
+
+: DebugMenu
+     " [DEBUG]" Menutitel  
+     1 Feld" Help"
+     2 Feld" =Break"
+     3 gosub? if Feld" GoSub" 
+              else goto? if Feld" GoTo" else Feld" " then
+              then
+     4 Feld" Step"
+     5 tracing? if Feld" Stop" else Feld" Trace" then
+     6 Feld" Run"
+     7 colon? if Feld" " else Feld" CPU" then
+     8 Feld" Exit"  ; 
+
+Word: Cur(step)
+
+\ [Bei Markierung liefert -fw die Position vor dem Wort] 
+: Cur(step)   ( -- n )
+     iStep curAdr @ is cur -fw 
+     dup 0> marked? and if 1+ then >cur cur  ; 
+
+Word: ShowWord
+
+: ShowWord
+     >Definition                        \ ev. Fehlermeldung gewesen
+     cur(step) dup is MarkCur           \ Wortanfang
+     begin 1+ dup pos c@ 33 < over blen > or until
+     1- is cur                          \ Wortende
+     y >AnfangsPos lAnfang LineText 
+     marked? if ?MarkLine else drop then
+     y y0 - 0 max .Line  ; 
+
+Word: MarkWord
+
+\ Erst Cursor unmarkiert verschieben, um eventuell zu scrollen ohne
+\ Markierung. 
+: MarkWord
+     cur(step) drop  set marked? ShowWord  clear marked?  ; 
+
+Word: UnmarkWord
+
+: UnmarkWord
+     ShowWord  ; 
+
+Word: ShowStep
+
+: ShowStep
+     DebugMenu >Definition MarkWord  ; 
+
+Group: Status
+
+Word: rDepth
+
+: rDepth   ( -- m )
+     rLen 32? if 4 else 2 then /  ; 
+
+Word: .rStack
+
+\ Stackinhalt zeigen unsigned. 
+: .rStack
+     theBase hex 76 is xs  xs xys ." --"  rDepth  
+     if   rdepth 0
+          do   i 32? if 4 else 2 then * rBuf + 
+               32? if d@t else @t 0 then (d.) 
+               xs over - 2- dup 50 < 
+               if   3drop xs 3 - xys ." .." leave 
+               else is xs  xs xys type 
+               then
+          loop 
+     then is theBase  ; 
+
+Word: cpuAcc?
+
+\ Drinlassen aber nicht brauchen bei HC11, F7=CPU lassen. 
+Flag cpuAcc? 
+
+Word: .CPUText
+
+Doer .CPUText 
+
+Word: DebugStacklinie
+
+: DebugStacklinie
+     Stacklinie >rahmen colon? does? or 
+     if   x4 8 - y4 xy ." RSTACK" 
+     else .CPUText
+     then normal  ; 
+
+Word: .CPUWerte
+
+Doer .CPUWerte 
+
+Word: .CPU
+
+: .CPU
+     theBase hex .CPUWerte  is theBase  ; 
+
+Word: .DebugStack
+
+\ Stackdisplay beim Debugging. 
+: .DebugStack
+     DebugStacklinie .Stack 
+     colon? does? or 
+     if rReadTarget .rStack  else .cpu then  ; 
+
+Group: Jumps
+
+Word: NextXT
+
+\ N„chstes Token, wird durch den Breakcode ersetzt. 
+0. double NextXT 
+
+Word: ZielXT
+
+\ Token des Jumpziels. 
+0. double ZielXT 
+
+Word: ZielIP
+
+\ ip des Jumpziels. 
+0. double ZielIP 
+
+Word: jump?
+
+Flag jump? 
+
+Word: Jumping?
+
+\ true bei Jump mit F3=Jump, oder wenn der letzte Opcode eines Codewortes
+\ kein JMP ist. 
+Flag Jumping? 
+
+Word: inWord?
+
+\ Liegt tadr im Code vom aktuellen Wort? 
+Doer inWord?   ( tadr -- f ) 
+
+Word: Sprung?
+
+\ Ist xt bei iStep ein (bedingter) Sprung? 
+Doer Sprung?   ( -- f ) 
+
+Word: Leave?
+
+\ Ist xt leave oder ?leave ? Dann Jumpziel ber rStack bestimmen. 
+Doer Leave?   ( -- f ) 
+
+Word: ColonJump?
+
+: ColonJump?   ( -- f )
+     Sprung? Leave? or  ; 
+
+Word: CondJmp?
+
+\ Conditional Jump (mit 8bit Offset)? 
+Doer CondJmp?   ( -- f ) 
+
+Word: AbsJmp?
+
+\ Absoluter Jump (mit 16bit Offset)? Ignorieren, wenn wir einen normalen
+\ Step ausfhren (nicht F3=Goto). 
+Doer AbsJmp?   ( -- f ) 
+
+Word: CodeJump?
+
+: CodeJump?   ( -- f )
+     CondJmp? AbsJmp? or  ; 
+
+Word: SetJumpBreak
+
+: SetJumpBreak
+     colon? if tReturn else ZielXT >Break then ZielIP SendXT  ; 
+
+Word: ResetJumpBreak
+
+: ResetJumpBreak
+     ZielXT ZielIP SendXT  ; 
+
+Word: ?Jump
+
+\ Sind wir auf einem Jumpcode? Dann einen Break auf das Jumpziel
+\ pflastern und das alte xt retten. Falls in Codewort der letzte Opcode
+\ kein JMP ist, l„uft der Code im Folgewort weiter, und da m”chten wir
+\ hin. Daher Jumping? setzen, damit Anfangwort erfasst wird. 
+: ?Jump
+     clear Jump?  colon? if ColonJump? else CodeJump? then
+     if   ZielIP ReadXT is ZielXT
+          SetJumpBreak  set Jump?
+     else iStep maxStep 1- =            \ kein JMP aber letzter Step?
+          colon? 0= and                 \ -- nur Code betrachten --
+          if set Jumping? then          \ als F3=Sprung betrachten
+     then  ; 
+
+Group: Steps
+
+Word: tIP
+
+\ Aktueller Instruktionszeiger in Colonwort. Bei tExecute nachgefhrt von
+\ ReadStack (Targetabh„ngig). Nur gebraucht fr Debug. 
+0. double tIP 
+
+Word: tPC
+
+\ Aktueller Instruktionszeiger in Codewort, bei tExecute nachgefhrt. 
+0. double tPC 
+
+Word: tES
+
+\ Erg„nzt tIP in fpc-Modell. 
+0 integer tES 
+
+Word: tZiel
+
+\ Erreichtes Ziel nach einem (bedingten) Sprung. tIP und tPC sind
+\ aktuelle Werte, gesetzt (und korrigiert) nach tExecute. 
+: tZiel   ( -- ip )
+     colon? if tIP else tPC then  ; 
+
+Word: Step(ip)
+
+\ Nach Sprung aus Zieladresse (ip) den zugeh”rigen Schritt bestimmen. 
+: Step(ip)   ( -- m )
+     maxStep AnfangsStep 
+     do i ip() tZiel d= if i leave&exit then loop
+     AnfangsStep  ; 
+
+Word: GoStep(ip)
+
+: GoStep(ip)
+     step(ip) is iStep  ShowStep  ; 
+
+Word: WortBeendet?
+
+: WortBeendet?   ( -- f )
+     tZiel inWord? 0= tryError? or  ; 
+
+Word: SetNextBreak
+
+: SetNextBreak
+     xt(step+1) is NextXT
+     colon? if tReturn else NextXT >Break then ip(step+1) SendXT  ; 
+
+Word: NextStep
+
+\ Aktuellen Schritt ausfhren. 
+: NextStep
+     ?Jump  SetNextBreak     
+     DoStep
+     NextXT ip(step+1) SendXT  jump? if ResetJumpBreak then
+     UnmarkWord  ; 
+
+Word: DoNextStep
+
+\ N„chsten Schritt ausfhren. 
+: DoNextStep
+     NextStep  Wortbeendet? 0= if GoStep(ip) then  ; 
+
+Word: DoJump
+
+: DoJump
+     set jumping?  DoNextStep  ; 
+
+Word: BreakIP
+
+0. double BreakIP 
+
+Word: BreakXT
+
+0. double BreakXT 
+
+Word: ClrBreak
+
+\ BreakIP auf einen Wert setzen, der als IP nicht vorkommt. 
+: ClrBreak
+     -1. is BreakIP  0. is BreakXT  ; 
+
+Word: ResetBreak
+
+: ResetBreak
+     BreakXT BreakIP SendXT  
+     >rahmen 12 23 xy 11 .- normal  ; 
+
+Word: ?ClrBreak
+
+: ?ClrBreak
+     BreakXT or if ResetBreak ClrBreak then  ; 
+
+Word: SetBreak
+
+: SetBreak
+     ?ClrBreak
+     ip(step) is BreakIP  xt(step) is BreakXT
+     colon? if tReturn else BreakXT >Break then ip(step) SendXT
+     >rahmen 12 23 xy ." Break=" 
+     theBase hex ip(step) d. is theBase
+     normal ; 
+
+Word: Trace
+
+\ Geht schrittweise durch den Code bis das Wort beendet ist oder Taste F5
+\ gedrckt wird. 
+: Trace
+     set tracing?
+     begin     .DebugStack tryError? if clear tracing? exit then
+               doNextStep  Wortbeendet? ?key F5 = or
+               tZiel BreakIP d= or
+     until 
+     clear tracing? DebugMenu  ; 
+
+Group: GetWort
+
+Word: cBuf
+
+\ Ein Puffer zum Zwischenspeichern der CPU-Register. 
+create cBuf    10 allot 
+
+Word: SaveCPU
+
+\ CPU-Register retten w„hrend Ladeoperationen in Debug. 
+: SaveCPU
+     tPC cBuf 2!  tIP cBuf 4 + 2!  tES cBuf 8 + !  ; 
+
+Word: ResetCPU
+
+: ResetCPU
+     cBuf 2@ is tPC  cBuf 4 + 2@ is tIP  cBuf 8 + @ is tES  ; 
+
+Word: =DebugWort
+
+\ Macht Wort(eintrag) zum aktuellen Debug-Wort. -- Loadwort kann CPU-Reg.
+\ „ndern durch Ausfhren von Worten beim laden. 
+: =DebugWort   ( eintrag -- )
+     GoWort ShowAll       
+     SaveCPU LoadWort ResetCPU          \ CPU Register beibehalten
+     ClrStatus DebugStackLinie  ; 
+
+Word: DasWort
+
+\ Eventuelles Zielwort beim GoSub oder GoNextwort. 
+0 integer DasWort 
+
+Word: DebugDasWort
+
+\ Den Debugger auf dasWort umschalten. 
+: DebugDasWort
+     dasWort =DebugWort  ; 
+
+Word: xtInListe?
+
+\ Liefert eintrag zu xt, falls er existiert in der aktuellen Wortliste.
+\ Legt eintrag in DasWort. [Bedingung xt=thecode(eintrag) UND Codel„nge>0
+\ (Metaworte ausschliessen) UND kein Alias] 
+: xtInListe?   ( xt -- f )
+     2>r AlfaAnker
+     begin     AlfaNachfolger dup
+     while     dup Codefeld d@s 2r@ d=
+               if   dup @Codel„nge over Alias? 0= and 
+                    if is dasWort 2r> 2drop true exit then then
+     repeat 2r> 2drop  ; 
+
+Word: ?xt=xt(jmp)
+
+\ Bei Umdefinitionen enth„lt xt einen Jmp zur neuen Version. [86: Fall
+\ jmp docol st”rt nicht, da wir nur hier sind, wenn xt noch nicht
+\ identifiziert wurde...] 
+: ?xt=xt(jmp)   ( xt1 -- xt2 )
+     2dup jmp? 
+     if   destination   
+     else " Sorry, jmp-adress is no execution token" Endmeldung
+     then  ; 
+
+Word: GetWort(xt)
+
+\ Sucht Eintrag zu xt und legt ihn in dasWort, folgt jmp-Kette bei
+\ Umdefinitionen. 
+: GetWort(xt)   ( xt -- )
+     begin xtInListe? not while ?xt=xt(jmp) repeat  ; 
+
+Group: Gosub
+
+Word: StartIP&XT
+
+\ Liefert ip und xt des Wortanfangs. 
+Doer StartIP&XT   ( -- ip xt ) 
+
+Word: SetStartBreak
+
+\ Zum Wortbeginn springen, indem der Wortanfang als Sprungziel
+\ deklariert und hier ein Break gesetzt wird. Das Debugwort ist neu
+\ geladen, d.h. der Code kann in den Codefenstern gelesen werden. 
+: SetStartBreak
+     StartIP&XT is ZielXT is ZielIP  SetJumpBreak  ; 
+
+Word: PushDebugwort
+
+: PushDebugwort
+     ip(step+1) push WortStack push WortStack  \ push caller next ip
+     xt(step+1) push WortStack push WortStack  \ push caller next xt
+     AktivWort push WortStack  ;               \ push caller eintrag 
+
+Word: UnterwortXT
+
+\ Liefert XT des Unterwortes. Falls dies ein Doer ist, wird das XT des
+\ Zielwortes bestimmt. 
+Doer UnterwortXT   ( -- xt ) 
+
+Word: ?GoDown
+
+\ Behandelt auch Create-Does und Doer. Mutterwort gilt als Colon,
+\ Kindwort als Codewort. 
+: ?GoDown
+     gosub? 0= ?exit ?ClrBreak 
+     colon?                             \ merken fr tStep, s.u.
+     UnterWortXT GetWort(xt) 
+     PushDebugwort  SetNextBreak  
+     DebugDasWort SetStartBreak       
+     if ColonStep else CodeStep then    \ s.o.
+     ResetJumpBreak GoStep(ip)  ; 
+
+Word: GoUpWord
+
+\ Gespeichertes Debugwort zurckholen in den Browser und den Breakpoint
+\ in Code l”schen. 
+: GoUpWord
+     ?ClrBreak  pop WortStack =DebugWort
+     pop WortStack pop WortStack ( xt ) 
+     pop WortStack pop WortStack ( ip ) 
+     SendXT  ; 
+
+Word: GoUp
+
+\ Wir sind bereits gesprungen, hoffentlich zurck zum Oberwort. Jetzt
+\ Oberwort rufen und Zeiger setzen, wenn tZiel noch im Wort liegt. 
+: GoUp
+     GoUpWord Wortbeendet? 0= if GoStep(ip) then  ; 
+
+Group: Init&End
+
+Word: DebugHelp?
+
+\ True bei Rckkehr von DebugHelp. 
+Flag DebugHelp? 
+
+Word: InitDebug
+
+\ L„dt Wort fr Steptabelle, schaltet Display um, setzt Break auf den
+\ Wortanfang und ruft das Wort. Break gibt Kontrolle zurck, der Break
+\ wird gel”scht und die Marke im Editor wird auf das erste Wort gesetzt.
+\ [Bei Rckkehr von Help nur Deffenster rufen, um TheWindow zu setzen.] 
+: InitDebug
+     DebugHelp? if clear DebugHelp? ShowStep exit then
+     clear tracing? 
+     SetBreakVector DebugStacklinie ClrWortStack ClrBreak 
+     LoadWort ClrStatus Wortezeigen WortMerken clear Jumping?  \ 4.087
+     SetStartBreak zca tExecute
+     ResetJumpBreak GoStep(ip)  ; 
+
+Word: SkipStep
+
+\ n Steps vor oder zurckgehen im Wort. tIP resp. tPC folgen mit. 
+: SkipStep   ( n -- )
+     UnmarkWord  iStep + AnfangsStep max  maxStep 1- min is iStep
+     ip(step) colon? if is tIP else is tPC then ShowStep  ; 
+
+Word: AnfangCodewort?
+
+\ Sind wir am Anfang eines Codewortes? 
+: AnfangCodewort?   ( -- f )
+     tPC xtInListe? tPC =Colon? 0= and  ; 
+
+Word: GoUp?
+
+\ Wenn ein Oberwort existiert, das noch nicht bis zu Ende getestet wurde,
+\ true liefern und aktuellen Step in Oberwort zeigen; sonst false
+\ liefern. 
+: GoUp?   ( -- f )
+     begin  SubWord? 
+     while  GoUp Wortbeendet? 0= if true exit then
+     repeat false  ; 
+
+Word: EndDebug?
+
+\ Hbsche Konstruktion, nicht? [Bei DebugDasWort den SP retten, da hier
+\ Loadwort drin und ev. Execute mit ev. anderer Stacktiefe passiert]
+\ Bei ColonDebug kann Unterwort den RP zurcksetzen, wenn Execute bei
+\ wLoad. Dann Debugger verlassen. 
+: EndDebug?   ( -- f )
+     tryError? tRP tRP0 2. d- d> or if true exit then
+     Wortbeendet? 
+     if   colon?
+          if   GoUp? not
+          else AnfangCodewort? Jumping? and 
+               if   tSP DebugDasWort is tSP GoStep(ip) false
+               else GoUp? not
+               then
+          then
+     else tZiel BreakIP d= 
+          if ResetBreak ClrBreak UnmarkWord GoStep(ip) then false
+     then clear Jumping?  ; 
+
+Word: EndDebug
+
+\ Debugspuren und Breakpunkte l”schen. TargetMonitor zeigen. 
+: EndDebug
+     DebugHelp? ?exit
+     tryError? 0= 
+     if   Sft? 0= if begin SubWord? while GoUpWord repeat then
+          BreakXT d0= 0= if ResetBreak then
+     then
+     UnmarkWord ClrMenuTitel 
+     %Wort is Modus  false is Bytes?
+     StackWindow .Stack .TargetMonitor WorteZeigen ShowText 
+     'bl =Marke  ; 
+
+Group: Routine
+
+Word: dCharCases/End?
+
+\ [Wenn die Stackeingabe mit Esc abgebrochen wird, ist Ende? true.] 
+: dCharCases/End?   ( c -- f )
+     false swap case 
+     'Esc of drop true endof
+     ZahlChar? 
+     if   Stackeingabe Ende? 0= if swap then    \ bei Esc kein Eintrag
+     then 
+     endcase  ; 
+
+Word: dFuncCases
+
+\ Func-Cases ohne Endm”glichkeit. 
+: dFuncCases   ( c1 -- c2 )
+     case 
+     'left of -1 SkipStep endof
+     'right of 1 SkipStep endof
+     'up of -4 SkipStep endof
+     'down of 4 SkipStep endof
+     'home of -80 SkipStep endof
+     'end of 80 SkipStep endof
+     exit endcase 0  ; 
+
+Word: dFuncCases/End?
+
+\ Kein Alt-Menu, daher auch kein Alt-F1-Help. Help in Kontext. 
+: dFuncCases/End?   ( c -- f )
+     case 
+     F1 of set DebugHelp? " F2=Break" Info true endof  \ 4.096 4.136
+     F2 of try SetBreak false endof
+     F3 of goto? if try doJump EndDebug?
+           else try ?GoDown false then endof
+     F4 of try DoNextStep EndDebug? endof
+     F5 of try Trace EndDebug? endof
+     F6 of try DoStep EndDebug? endof
+     F7 of CpuAcc? 0= is CpuAcc? false endof
+     F8 of true endof
+     ?Stackbefehl drop false endcase  ; 
+
+Word: DebugRoutine
+
+: DebugRoutine
+     try InitDebug tryError? if EndDebug exit then
+     begin     CheckDepth try .DebugStack  try ?Monitor 
+               Monitor? 0= tryError? or if EndDebug exit then
+               key ?dup
+               if   dCharCases/End?                               
+               else dFuncCases dFuncCases/End? 
+               then if EndDebug exit then
+     again  ; 
+

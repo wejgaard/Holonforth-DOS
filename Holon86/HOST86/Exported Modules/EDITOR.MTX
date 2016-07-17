@@ -1,0 +1,926 @@
+Module: Editor
+
+Group: Buffer
+
+Word: BufLen
+
+\ LÑnge der Editbuffer (Defbuf, Combuf, Cutbuf) 
+1024 constant BufLen 
+
+Word: ComBuf
+
+\ Buffer mit Reserve zur Vorsicht. 
+create ComBuf   BufLen 8 + allot 
+
+Word: DefBuf
+
+create DefBuf   BufLen 8 + allot 
+
+Word: Buf
+
+0 integer Buf 
+
+Word: Pos
+
+\ Adresse des i-ten Zeichens im aktuellen Editierpuffer 
+: Pos   ( i -- adr )
+     Buf +  ; 
+
+Word: pos@
+
+\ Liefert pos(i) _innerhalb_ do..loop 
+: pos@   ( -- c )
+     i' pos c@  ; 
+
+Word: Def?
+
+\ true wenn in definition 
+: Def?   ( -- f )
+     DefBuf Buf =  ; 
+
+Word: DefLÑnge
+
+0 integer DefLÑnge 
+
+Word: ComLÑnge
+
+0 integer ComLÑnge 
+
+Word: BLen
+
+0 Pointer BLen 
+
+Word: BLen+
+
+\ BufferlÑnge anpassen nach Einsetzen und Lîschen. 
+: BLen+   ( u -- )
+     BLen + 1 max BufLen 1- min is BLen  ; 
+
+Word: DefCur
+
+0 integer DefCur 
+
+Word: ComCur
+
+0 integer ComCur 
+
+Word: Cur
+
+0 Pointer Cur 
+
+Word: Cur+
+
+: Cur+   ( n -- )
+     Cur + 0 max blen 1- min is Cur  ; 
+
+Word: Rest
+
+\ Anzahl Zeichen bis Ende inklusive Zeichen bei Cursor 
+: Rest   ( -- u )
+     blen cur -  ; 
+
+Word: X
+
+\ Cursorspalte 
+0 integer X 
+
+Word: Y
+
+\ Cursorzeile 
+0 integer Y 
+
+Word: >XY
+
+: >XY
+     0 0  cur 0
+     ?do  pos@ dup 13 >
+          if   14 <> if 1+ then
+          else 2drop 1+ 0
+          then
+     loop is x is y  ; 
+
+Word: DefY0
+
+\ Erste sichtbare Zeile in Definition 
+0 integer DefY0 
+
+Word: ComY0
+
+\ Erste sichtbare Zeile in Comment 
+0 integer ComY0 
+
+Word: Y0
+
+\ Erste sichtbare Zeile im Text 
+0 Pointer Y0 
+
+Word: uZeile
+
+: uZeile   ( -- u )
+     y0 Fensterhîhe + 1-  ; 
+
+Word: .Cur
+
+\ x eins verschoben, da .Line erst bei Position 1 beginnt. 
+: .Cur
+     x y y0 - wxy  ; 
+
+Word: Textzeilen
+
+\ Anzahl Zeilen im Text 
+: Textzeilen   ( -- u )
+     1  Blen 0 ?do pos@ 14 < if 1+ then loop  ; 
+
+Word: >Y0
+
+: >Y0   ( u -- )
+     Textzeilen Fensterhîhe - min 0 max is y0  ; 
+
+Group: ShowText
+
+Word: /name
+
+\ Anzahl Zeichen pro Name. 20 Zeichen fÅllen Browserfenster in DOS Mode. 
+19 constant /name 
+
+Word: Name$
+
+\ Vielverwendeter String bei Namenoperationen 
+/name Stringbuf Name$ 
+
+Word: lAnfang
+
+\ Anfangsposition von aZeile 
+0 integer lAnfang 
+
+Word: aZeile
+
+\ Anfangszeile 
+0 integer aZeile 
+
+Word: eZeile
+
+\ Endzeile 
+0 integer eZeile 
+
+Word: OldZeilen
+
+\ Anzahl Zeilen vor der Operation (Ins,Del) 
+0 integer OldZeilen 
+
+Word: >AnfangsPos
+
+\ Anfangsposition bestimmen und in lAnfang legen 
+: >AnfangsPos   ( iZeile -- )
+     dup
+     if   blen 0 
+          ?do  pos@ 14 < 
+               if 1- dup 0= if drop i 1+ leave then then    
+          loop
+     then is lAnfang  ; 
+
+Word: ?Textzeilen
+
+\ Wenn die Anzahl Zeilen geÑndert hat (Einsetzen von CR oder Umbruch),
+\ eventuell y0 begrenzen (sodass der Text das Fenster fÅllt, wenn
+\ mîglich) und die restlichen Zeilen im Fenster auftauchen. 
+: ?Textzeilen
+     Textzeilen dup OldZeilen <>
+     if   y0 >y0  y0 is aZeile  aZeile >AnfangsPos
+          uZeile is eZeile
+     then is OldZeilen  ; 
+
+Word: hell?
+
+Flag hell? 
+
+Word: NameAnfang
+
+0 integer NameAnfang 
+
+Word: LineText
+
+\ anfang ist erstes Zeichen auf der Zeile (hinter cr), ende is pos von cr
+\ oder blen. Mit Begrenzung des Namens auf /name Zeichen 
+: LineText   ( anfang -- ende )
+     >normal  blen swap
+     do   pos@ case
+          'bl of hell? if normal clear hell? then 2 add LinePos endof
+           14 of bold  set hell?  LinePos is NameAnfang endof  
+          dup 14 <  LinePos 2/ Fensterbreite > dup if 7 emit then or
+          if   clear hell? normal drop i leave&exit
+          else hell? 
+               if   LinePos NameAnfang - 2/ 1+ /name >
+                    if drop 'bl dup i pos c! then  
+               then lemit
+          then endcase   
+     loop blen  ; 
+
+Word: MarkCur
+
+\ Beginn der Markierung 
+0 integer MarkCur 
+
+Word: Marked?
+
+Flag Marked? 
+
+Word: lZeile
+
+0 integer lZeile 
+
+Word: -#14
+
+\ Anzahl '14' Zeichen von lAnfang bis pos von pos abziehen 
+: -#14   ( pos1 -- pos2 )
+     dup>r  0  Buf lAnfang +   
+     r> lAnfang - 0 max 0 
+     ?do dup c@ 14 = if swap 1+ swap then 1+ loop drop  -  ; 
+
+Word: ?MarkLine
+
+: ?MarkLine   ( ende -- )
+     cur -#14 min lAnfang Markcur -#14 max      ( -- ende' anfang' )
+     2dup <
+     if   2drop
+     else inverse 
+          dup lAnfang - 2* LineBuf + 1+
+          -rot - 1+ 0 do Attribute over c! 2+ loop drop
+          normal
+     then  ; 
+
+Word: .BildNeu
+
+\ Bildzeilen von aZeile bis eZeile auffrischen. Anfang von Text ist
+\ Beginn von aZeile, Anfang vom Bild ist aZeile-y0. 
+: .BildNeu    
+     CurOff ?Textzeilen
+     aZeile y0 - 0 max is lZeile
+     begin     lAnfang LineText marked? if dup ?MarkLine then 
+               1+ is lAnfang  lZeile dup .Line 1+ is lZeile
+               lAnfang blen 1- >
+               if   >normal Fensterhîhe lZeile ?do i .Line loop true
+               else lZeile eZeile y0 - >
+               then
+     until  ; 
+
+Word: .Buffer
+
+: .Buffer
+     y0 is aZeile y0 >AnfangsPos  uZeile is eZeile  .BildNeu  ; 
+
+Word: >Cur
+
+\ Cursor neu setzen, Display auffrischen, wenn ausserhalb Fenster. 
+: >Cur   ( u -- )
+     blen 1- marked? + min 0 max is cur >xy
+     y y0 < 
+     if   y >y0 .Buffer 
+     else y uZeile > 
+          if y Fensterhîhe 1- - >y0 .Buffer then
+     then .Cur  ; 
+
+Group: EditFenster
+
+Word: Comment
+
+: Comment
+     ComBuf is Buf
+     adr ComLÑnge set BLen
+     adr ComCur set Cur
+     adr ComY0 set y0
+     ; 
+
+Word: Definition
+
+: Definition
+     DefBuf is Buf
+     adr DefLÑnge set BLen
+     adr DefCur set Cur
+     adr DefY0 set y0
+      ; 
+
+Word: InitCom
+
+\ Der gemeinsame Teil bein Rufen des ComFensters. 
+: InitCom
+     ComFenster Comment TextZeilen is Oldzeilen  ; 
+
+Word: InitDef
+
+\ Der gemeinsame Teil beim Rufen des Deffensters. 
+: InitDef
+     DefFenster Definition TextZeilen is Oldzeilen  ; 
+
+Word: >Comment
+
+: >Comment
+     InitCom Cur >Cur  ; 
+
+Word: >Definition
+
+: >Definition
+     InitDef  Cur >Cur  ; 
+
+Word: .Comment
+
+: .Comment
+     >Comment .Buffer  ; 
+
+Word: .Definition
+
+: .Definition
+     >Definition .Buffer  ; 
+
+Word: ComLîschen
+
+: ComLîschen
+     ComBuf 50 'bl fill  1 is ComLÑnge  .Comment  ; 
+
+Word: DefLîschen
+
+: DefLîschen
+     DefBuf 50 'bl fill  1 is DefLÑnge  .Definition  ; 
+
+Word: TextLîschen
+
+: TextLîschen
+     ComLîschen DefLîschen  ;           \ faktorisiert 4.011 
+
+Group: Parsing
+
+Word: TIB
+
+\ Text input buffer. Wird auf aktuellen Buffer gesetzt. 
+0 integer TIB 
+
+Word: #TIB
+
+\ Anzahl Zeichen in TIB 
+0 integer #TIB 
+
+Word: >IN
+
+\ Aktuelle Position in TIB wÑhrend Parsing 
+0 integer >IN 
+
+Word: Def>Tib
+
+\ DefBuf als TextInputStream benutzen 
+: Def>Tib 
+     DefBuf is tib 
+     DefCur 0 max is >in  
+     DefLÑnge is #tib 
+     Definition  ; 
+
+Word: Word$
+
+\ ErhÑlt String von wScan. 4.103 Von 31 auf 80 Zeichen erweitern. 
+80 StringBuf Word$ 
+
+Word: wSkip
+
+\ Schiebt >IN Åber Leerraum bis zu nÑchstem Wort, maximal bis DeflÑnge 
+: wSkip   
+     begin     tib >in + c@  33 <  
+               >in #tib < and
+     while     1 add >in
+     repeat  ; 
+
+Word: wScan
+
+\ Holt Text ab >in bis zu nÑchstem Leerzeichen oder DeflÑnge als counted
+\ String in Word$. Schiebt >in hinter Leerzeichen, d.h. auf Anfang des
+\ folgenden Textes bzw. Wortes. 4.103 Auf 80 Zeichen erweitern. 
+: wScan
+     0 >r
+     begin     tib >in + c@ dup 32 >
+               >in #tib < and
+     while     r> 1+ 79 min >r  Word$ r@ + c!  1 add >in    \ 4.103
+     repeat  drop r> Word$ c! 1 add >in  ; 
+
+Word: ParseWord
+
+\ Folgendes Wort aus Inputstream holen und in Uppercase wandeln.
+\ 67p Name Ñndern 34-17 
+: ParseWord
+     wSkip wScan  ; 
+
+Group: Meldungen
+
+Word: Meldung
+
+: Meldung   ( "adr -- )
+     Test?
+     if   3 spaces
+     else ComFenster wipe inverse 65 spaces 5 0 wxy CurOff
+     then "type  ; 
+
+Word: Pause
+
+: Pause
+     now begin 1000 msec? until  ; 
+
+Word: Kurzmeldung
+
+\ 622 Auch bei Show? Comment nicht auffrischen 
+: Kurzmeldung   ( "adr -- )
+     Meldung normal Pause Test? Show? or 0= if .Comment then  ; 
+
+Word: MsgKey
+
+0 integer MsgKey 
+
+Word: WaitKey
+
+: WaitKey
+     Test? ?exit
+     normal
+     GetKey is MsgKey .Comment  ; 
+
+Word: WarteMeldung
+
+: WarteMeldung   ( "adr -- )
+     Meldung  WaitKey  ; 
+
+Word: EndMeldung
+
+: EndMeldung
+     WarteMeldung EndTry  ; 
+
+Word: Y/N?
+
+\ 622 True bei y,Y, sonst false. 
+: Y/N?   ( -- f )
+     GetKey $5F and [char] Y = .Comment  ; 
+
+Word: Yes?
+
+: Yes?   ( "adr -- f )
+     Meldung 5 spaces normal y/n?  ; 
+
+Word: inv$.
+
+: inv$.   ( "adr -- )
+     inverse "type normal  ; 
+
+Group: Cut&Paste
+
+Word: CutBuf
+
+\ Puffer fÅr Cut-Text, maximal fÅr einen vollen Edittext 
+create CutBuf    BufLen 8 + allot 
+
+Word: CutLÑnge
+
+0 integer CutLÑnge 
+
+Word: QuitMarked
+
+: QuitMarked
+     clear marked? .Buffer  ; 
+
+Word: ?QuitMarked
+
+\ Unnîtiges Updateing vermeiden 
+: ?QuitMarked
+     marked? if QuitMarked then  ; 
+
+Word: ?.Marked
+
+\ Wenn Text markiert ist, von OldCur bis Cur neu zeigen. Falls Cur vor
+\ MarkCur sitzt, Markierzustand beenden. 
+: ?.Marked
+     marked? 0= ?exit 
+     Cur MarkCur 1+ < if  QuitMarked exit then
+     aZeile >Anfangspos .BildNeu  ; 
+
+Word: SetMarked
+
+\ Markierzustand einschalten, Cursor merken 
+: SetMarked
+     set marked?  cur is MarkCur  ; 
+
+Word: >Def/Com
+
+: >Def/Com
+     ?QuitMarked Def? if >Comment else >Definition then  ; 
+
+Group: Cursor
+
+Word: CurPos@
+
+: CurPos@   ( -- c )
+     cur pos c@  ; 
+
+Word: CurPos!
+
+: CurPos!   ( c -- )
+     cur pos c!  ; 
+
+Word: +cr
+
+\ Position des folgenden weichen cr (12 oder 13) oder blen. 
+\ [68v u nicht auf blen-1 begrenzen. +cr muss Cur=blen setzen kînnen,
+\ sonst Problem im Umbruch. b35-4] 
+: +cr   ( -- u )
+     cur blen cur ?do 1+ dup pos c@ 14 < ?leave loop  ; 
+
+Word: -cr
+
+\ Lage des vorigen weichen cr. 
+\ [Liefert -1 bei Zeile 0, da Anfang der Zeile bei -cr 1+ ] 
+: -cr   ( -- u )
+     cur dup 1+ 0
+     ?do 1- dup pos c@ 14 < ?leave loop  ; 
+
+Word: LPos
+
+\ Position in Zeile, fÅr Auf,Ab 
+0 integer LPos 
+
+Word: -LPos
+
+\ Zeilenposition lîschen 
+: -LPos
+     -1 is lPos  ; 
+
+Word: ?LPos
+
+\ Wenn lPos leer ist, neu setzen. 
+: ?LPos
+     lpos 0< if cur -cr - is lPos then  ; 
+
+Word: -Char
+
+\ Cursor ein Zeichen retour. 
+: -Char
+     y is eZeile
+     cur 2- pos c@ 14 =                                     \ 4.212
+     if -2 else -1 then cur + >cur -lPos 
+     y is aZeile ?.Marked  ; 
+
+Word: +Char
+
+: +Char
+     y is aZeile  
+     cur blen 1- = ?Exit 
+     cur pos c@ 14 = if 2 else 1 then cur + >cur            \ 4.212
+     -lPos 
+     y is eZeile ?.Marked  ; 
+
+Word: Hit?
+
+\ Bedingung fÅr Uebergang von Wort zu Leerzeichen. 
+\ f1 = Resultat f3 von vorigem Test, f2 = aktualle Bedingung
+\ f3 = f1 or (f2=0),  f4 = f2 and f3 
+: Hit?   ( f1 f2 -- f3 f4 )
+     swap over 0= or swap over and  ; 
+
+Word: -fw
+
+\ Liefert Anfang von vorigem Textwort
+\ [Zeichen Åber ascii=20 gelten als Text, ausser 32 natÅrlich] 
+: -fw   ( -- u )
+     0 0 -1 cur 1-
+     do   pos@ dup 'bl = swap dup 20 < swap 14 <> and or hit?  \ 4.212
+          if 2drop i 0 leave then
+     -1 +loop drop
+     dup if marked? not if 1+ then then  ; 
+
+Word: +fw
+
+\ Liefert Anfang von folgendem Textwort oder Bufferende. 
+: +fw   ( -- u )
+     blen 0  blen 1+ cur marked? if 1+ then
+     curpos@ 14 = if 1+ then                                \ 4.212
+     do   pos@ dup 20 > swap 'bl <> and hit? 
+          if 2drop i 0 leave then
+     loop drop
+     marked? if 1- then  ; 
+
+Word: -1Wort
+
+\ Setzt Cursor auf Anfang von vorigem Textwort 
+: -1Wort
+     y is eZeile -fw >cur -lPos y is aZeile ?.Marked  ; 
+
+Word: +1Wort
+
+\ Setzt Cursor auf Anfang von folgendem Textwort 
+: +1Wort
+     y is aZeile +fw >cur -lPos y is eZeile ?.Marked  ; 
+
+Word: StartOfLine
+
+\ Cursor auf Zeilenanfang. 
+: StartOfLine
+     -cr 1+ >cur -lPos ?.Marked  ; 
+
+Word: EndOfLine
+
+\ Cursor auf Zeilenende, wenn bereits dort und erstes DrÅcken von 'Ende:
+\ hier bleiben, erst beim zweiten DrÅcken zu Ende von folgender Zeile. 
+: EndOfLine
+     curpos@ 13 >  NewKey OldKey = or
+     if +cr >cur -lPos ?.Marked then  ; 
+
+Word: Home
+
+: Home
+     ?QuitMarked 0 >cur  ; 
+
+Word: End
+
+: End
+     blen 1- >cur ?.Marked  ; 
+
+Word: +LPos
+
+: +LPos 
+     cur lPos + +cr min >cur  ?.Marked  ; 
+
+Word: Auf
+
+: Auf
+     y is eZeile
+     ?lPos -cr is dup cur 0< 
+     if   0 >cur else -cr is cur 
+          cur lPos + +cr min >cur  
+          y is aZeile  ?.Marked   
+     then  ; 
+
+Word: Ab
+
+\ Schiebt Cursor auf untere Zeile 
+: Ab
+     y is aZeile
+     ?lPos cur pos c@ 14 < 0= if +cr is cur then
+     cur lPos + +cr min >cur  y is eZeile  ?.Marked  ; 
+
+Word: PageUp
+
+: PageUp
+     ?lPos Fensterhîhe 0 
+     do   -cr is cur  cur 0< if 0 >cur leave&exit then 
+     loop +lPos  ; 
+
+Word: PageDn
+
+: PageDn
+     ?lPos Fensterhîhe 1- 0 do +cr is cur loop  +lPos  ; 
+
+Group: Umbruch
+
+Word: #14
+
+\ Anzahl 14-Zeichen zwischen pos1 und 2. 4.216 
+: #14   ( pos2 pos1 -- u )
+     0 -rot ?do pos@ 14 = if 1+ then loop  ; 
+
+Word: +#14
+
+\ Anzahl Zeichen von pos2 zu pos1, 14-er Zeichen abziehen. 4.216 
+: +#14   ( pos2 pos1 -- n )
+     2dup #14 + -  ; 
+
+Word: ZeileTrennen
+
+\ Weiches cr einsetzen vor letztem Wort, das keinen Platz hat, oder Wort
+\ trennen am Zeilenende, wenn 'Wort' lÑnger ist als eine halbe Zeile. 
+\ [Gerufen mit cur am Ende der langen Zeile, cur vorschieben zur
+\ Position, die dem Fensterende entspricht und dabei die 14-Marken
+\ berÅcksichtigen.] 
+: ZeileTrennen                                              \ 4.216
+     cur -cr 
+     begin 2dup +#14 Fensterbreite > while swap 1- swap repeat
+     drop is cur
+     cur Fensterbreite 2/ - cur
+     do pos@ 'bl = if i is cur leave then -1 +loop
+     12 curpos!  ; 
+
+Word: ?wcrSchieben
+
+\ Probieren wcr zu schieben, eventuell hat ganze Zeile Platz (ohne wcr).
+\ Es kann vorkommen, dass die Restzeile noch nicht Platz hat, dass also
+\ mehrmals geteilt werden muss (z.B. bei Einsetzen eines Textblockes). 
+: ?wcrSchieben                                              \ 4.216
+     'bl curpos! +cr is cur             \ wcr lîschen
+     cur -cr +#14 Fensterbreite > 
+     if Zeiletrennen then  ; 
+
+Word: ?VorigeZeile
+
+\ Wenn der Paragraph sich auf eine vorige Zeile erstreckt, nachschauen ob
+\ hier ein neuer Umbruch mîglich ist. Vorige Zeile nur zeigen, falls sie
+\ bereits im Fenster sichtbar ist. 
+: ?VorigeZeile                                              \ 4.216
+     curpos@ 13 = cur 0< or ?Exit       \ keine vorige Zeile?
+     +fw -cr +#14 Fensterbreite <       \ hat folgendes Wort Platz?
+     if   ?wcrSchieben                  \ cur jetzt vor cr
+          aZeile y0 >                   \ wÑre aZeile-1 sichtbar?
+          if   -1 add aZeile -cr        \ dann vorige Zeile zeigen
+          else cur                      \ sonst nur Zeilenanfang korr.
+          then 1+ is lAnfang
+     then  ; 
+
+Word: eZeile+1
+
+: eZeile+1
+     eZeile 1+ uZeile min is eZeile  ; 
+
+Word: ?ZeileTrennen
+
+\ Gerufen mit cur am Zeilenende. 
+: ?ZeileTrennen
+     cur -cr +#14 Fensterbreite >       \ umbrechen?  4.215, 4.216
+     if   ZeileTrennen                  \ cur an Zeilenende
+          eZeile+1
+     then  ; 
+
+Word: wcrTesten
+
+\ Wir sind bei wcr am Zeilenende. 
+: wcrTesten
+     cur ?wcrSchieben cur <> if eZeile+1 then  ; 
+
+Word: ?Umbruch
+
+\ Cur sitzt am Anfang des geÑnderten Textes, Zeile = y. 
+: ?Umbruch
+     cur y dup is aZeile is eZeile
+     -cr dup is cur 1+ is lAnfang       \ cur auf Anfang akt. Zeile
+     ?VorigeZeile                       \ do.
+     begin     +cr is cur               \ Ende nÑchster Zeile
+               cur blen = curpos@ 13 = or    \ Ende Paragraph?
+               if   ?ZeileTrennen true
+               else wcrTesten false
+               then
+     until .BildNeu >cur  ; 
+
+Group: Delete
+
+Word: DelInBuf
+
+\ u Zeichen ab cur im Editbuffer entfernen 
+: DelInBuf   ( u -- )
+     Rest min >r cur pos dup r@ + swap Rest r@ - move
+     r> negate blen+ 'bl blen 1- pos c! ?Umbruch  ; 
+
+Word: Del
+
+\ Zeichen bei cur oder markierten Teil lîschen, markierten Teil in
+\ CutBuf schieben. 
+: Del
+     marked?
+     if   clear Marked?  cur MarkCur - 1+ is CutLÑnge
+          MarkCur pos CutBuf CutLÑnge move
+          MarkCur >cur CutLÑnge DelInBuf
+     else curpos@ 14 = if 1 cur+ then                       \ 4.212
+          curpos@ 14 < if 0 is OldZeilen then
+          1 DelInBuf
+     then  ; 
+
+Word: DelUntil
+
+\ Lîschen von cur bis u und in CutBuf stecken 
+: DelUntil   ( u -- )
+     cur - is CutLÑnge
+     cur pos CutBuf CutLÑnge move
+     CutLÑnge DelInBuf  ; 
+
+Word: DelTextWort
+
+\ Wort ab cur lîschen zu CutBuf 
+: DelTextWort
+     ?QuitMarked +fw +cr min DelUntil  ; 
+
+Word: DelLine
+
+\ Zeile von cur lîschen zu CutBuf. Wenn Zeile leer, nur cr lîschen
+\ (Cutbuf bleibt erhalten) 
+: DelLine
+     ?QuitMarked StartOfLine curpos@ 14 <
+     if Del else +cr 1+ blen min DelUntil then 
+     .buffer  ;                                             \ 4.703 
+
+Word: <DelBlank
+
+\ Leerraum links lîschen eventuell inklusive cr 
+: <DelBlank
+     cur 0= ?Exit 
+     cur 1- begin dup pos c@ 33 < over and while 1- repeat
+     dup pos c@ 32 > if 1+ then
+     dup cur <
+     if   cur over - swap is cur  0 is OldZeilen  DelInBuf
+     else drop
+     then  ; 
+
+Word: ?NameAnWort
+
+\ Testen, ob ein Name hinten an ein Wort gerÅckt worden ist. Falls ja,
+\ entnamen. 
+: ?NameAnWort
+     curpos@ 14 = cur 1- pos c@ 32 > and  \ Name an Wort gerÅckt?
+     if 1 DelInBuf then                   \ Marke lîschen 4.212
+     ; 
+
+Word: Backspace
+
+\ Wenn ein Zeichen hinter einer Namenmarke gelîscht wurde, Cursor auf
+\ Namenmarke setzen. Wenn vor der Namenmarke kein Space, Marke lîschen. 
+: Backspace
+     sft? 
+     if   <DelBlank 
+     else -1 Cur+ Del  
+          cur 1- pos c@ 14 = if -1 cur+ then   \ Namenmarke? 4.212   
+          ?NameAnWort                          \ 4.212
+     then  ; 
+
+Word: UnName
+
+\ Namecode aus Wort entfernen. 
+: UnName                                                    \ 4.212
+     cur
+     curpos@ 14 = 
+     if   1 DelInBuf
+     else 1 cur+ -1Wort                  \ Position beibehalten
+          curpos@ 14 = if 1 DelInBuf 1- then
+     then >cur  ; 
+
+Group: Insert
+
+Word: ?InsPlatz
+
+\ Platz schaffen fÅr maximal u1 Zeichen ab Cursorposition, bis Buffer
+\ voll. u2=u1 wenn genug Platz, u2<u1 sonst. Und Text einsetzen. 
+: ?InsPlatz   ( u1 -- u2 )
+     BufLen 1- blen - 0 max                  ( -- u1 platz -- )
+     2dup >
+     if   nip Def? " Sorry, edit buffer is full" KurzMeldung 
+          if >Definition then  ( CurOn )
+     else drop
+     then dup 
+     if dup cur pos dup rot + Rest 1+ move then  ; 
+
+Word: InsChar
+
+\ Zeichen c einsetzen bei cur. 
+:  InsChar   ( c -- )
+     ?QuitMarked 1 ?insPlatz
+     if   dup 'bl > curpos@ 14 = and if 1 cur+ then         \ 4.212
+          curpos! 1 blen+ 1 cur+ ?Umbruch
+     else drop
+     then  ; 
+
+Word: InsCut
+
+\ Text aus Cutbuf bei Cur einsetzen. 
+: InsCut
+     ?QuitMarked CutLÑnge ?dup
+     if   ?InsPlatz ?dup
+          if   dup CutBuf cur pos rot move  ?NameAnWort     \ 4.212
+               blen+ ?Umbruch 
+          then
+     then  ; 
+
+Word: InsSpaces
+
+: InsSpaces   ( u -- )
+     ?InsPlatz ?dup
+     if   cur pos over 'bl fill 
+          dup blen+ cur+ ?Umbruch 
+     then  ; 
+
+Word: Tab
+
+: Tab
+     ?QuitMarked 5 x 5 mod - InsSpaces  ; 
+
+Word: IstName
+
+\ Name markieren mit char=14 am Anfang. Cursor nicht bewegen (cur+1!), da
+\ ein Verschieben unmotiviert ist und nur verwirrt. FrÅhere '14' lîschen
+\ um mehrfache '14' zu vermeiden. 4.099 ohne Changed? 
+: IstName
+     UnName  cur  1 cur+ -1Wort 14 InsChar
+     dup pos c@ 14 <> if 1+ then >cur  ;                    \ 4.212 
+
+Word: GetMargin
+
+\ Leerzeichen am Anfang der Zeile, maximal bis cur 
+: GetMargin   ( -- u )
+     0  blen -cr 1+ do 1+ pos@ 32 <> ?leave loop  1-
+     cur -cr - 1- min  ; 
+
+Word: InsCR
+
+\ In Definition einrÅcken wie vorige Zeile. Die Anzahl Zeilen muss nicht
+\ zunehmen, da im folgenden Paragraph ein wcr verschwinden kann. 
+: InsCR
+     ?QuitMarked  1 ?InsPlatz
+     if   GetMargin 13 curpos! 1 blen+ 1 cur+
+          0 is OldZeilen
+          dup Def? and if InsSpaces else drop ?Umbruch then
+     then  ; 
+
