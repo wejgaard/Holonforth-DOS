@@ -1,0 +1,13 @@
+<!-- DTD for HolonX XML Files --> 
+
+<!ELEMENT Module (Comment?, Group*)>
+<!ELEMENT Group (Comment?, Word*)>
+<!ELEMENT Word (Comment, Definiton)>
+<!ELEMENT Comment (#PCDATA)>
+<!ELEMENT Definition (#PCDATA)>
+
+<!ATTLIST Module name CDATA #REQUIRED>
+<!ATTLIST Group name CDATA #REQUIRED>
+<!ATTLIST Word name CDATA #REQUIRED>
+
+

@@ -1,0 +1,44 @@
+PRN2FILE
+Command
+
+Tom Kihlken     1987/No. 22 (Utilities)
+
+
+Purpose:	Captures any output nominally directed to a printer to a file
+ that can then be edited by a word processor or printed later.
+
+Format:	PRN2FILE [d:][path]filename [/Pn] [/Bn] [/U]
+
+Remarks:	PRN2FILE is a memory resident program that is normally loaded
+ as part of your AUTOEXEC.BAT file.  It should be installed before other print
+ utilities, such as a print spooler or the DOS MODE command.  Once installed,
+ the program may be run multiple times to change the filename (the drive and
+ path default to the current directory unless specified) designated to receive
+ the printer output.
+
+	Unless the filename is changed, successive print operations are 
+appended to (rather than overwrite) the created file.  To disable the printer
+ output redirection, simply omit to specify a filename.
+
+	The optional /Pn parameter designates the printer number (the default
+ is LPT1) to be redirected.  Note that output to a non-existent printer (/P2
+ in a one-printer system) is supported.  This is another way to permit normal
+ printing while PRN2FILE remains resident.  Legal values for Pn range from 1
+ through 3.
+
+	The optional /Bn parameter sets the buffer size.  The default value is
+ 4096 bytes, and values up to 64K may be specified.  The buffer repeatedly
+ empties when partially full in order to minimize the chance of buffer 
+overflow even when DOS may be called on for other activities than writing the
+ buffer to disk.  Should buffer overflow occur an error message is produced,
+ but some data will be lost, so the file should be re-written using a larger
+ buffer.
+
+	The optional /U parameter is used to unload PRN2FILE from memory.  If
+ other memory-resident utilities have been loaded after PRN2FILE and have
+ chained onto the same interrupts, it will not be possible to unload the 
+program, and a message to this effect will be displayed.
+
+	All optional parameters may be entered in any order, but must each be
+ separated by a single space character that acts as a delimiter.
+
