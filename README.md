@@ -1,6 +1,6 @@
 ###Hosts and Targets
 The Holonforth IDE's are cross-development systems. We use the Host/Target concept usually applied to embedded systems. 
-The IDE is the host that develops into a target system - via an umbilical (tethered) connection. 
+The IDE is the host that develops into a target application - via an umbilical (tethered) connection. 
 
 Every Holonforth-DOS system is a host when you use it for application development. But the systems have themselves been developed as targets of Holon86 - including Holon86 itself (since the day when Holonforth was on its own). 
 
