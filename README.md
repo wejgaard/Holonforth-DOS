@@ -12,13 +12,17 @@ IDE for 68HC11 targets
 http://www.holonforth.com/holon11.html 
  
 
-
 ###HolonJ
 Forth to JVM IDE
 
 http://www.holonforth.com/holonj.html
   
 Compiles Forth to JVM code - Write Java programs in Forth.
+
+###HolonX
+A universal structured file editor with change control (validation).
+
+http://www.holonforth.com/holonx.html
 
 ###DOSBox
 
