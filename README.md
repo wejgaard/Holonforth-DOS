@@ -27,12 +27,5 @@ http://www.holonforth.com/holonx.html
 ###DOSBox
 
 These systems run in Windows XP and earlier  
-and in a DOSBox everywhere
-
-
-####DOSBox Setup in OS-X    
-~/Library/Preferences/DOSBox 0.74 Preferences  
-[autoexec]  
-mount c  ~/..../Holonforth-DOS  
-C:
+and in a [DOSBox](https://www.dosbox.com/wiki) everywhere
 
