@@ -20,7 +20,7 @@ http://www.holonforth.com/holonj.html
 Compiles Forth to JVM code - Write Java programs in Forth.
 
 ###HolonX
-A universal structured file editor with change control (validation).
+A universal source code handler and refactoring browser with change control (validation).
 
 http://www.holonforth.com/holonx.html
 
