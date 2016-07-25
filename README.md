@@ -30,7 +30,7 @@ These systems run in Windows XP and earlier
 and in a DOSBox everywhere
 
 
-DOSBox Setup in OS-X    
+####DOSBox Setup in OS-X    
 ~/Library/Preferences/DOSBox 0.74 Preferences  
 [autoexec]  
 mount c  ~/..../Holonforth-DOS  
