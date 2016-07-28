@@ -7,7 +7,7 @@ Every Holonforth-DOS system is a *host* when you use it for application developm
 ###Projects
 Holonforth IDE's are devoted to a specific application. For a new project you create a copy of the Holon-system (86, 11, J or X) and give it the name of the project or application. The IDE stores the state of development and restarts with the project exactly as you left it. You can continue to develop immediately.
 
-The repo includes the four projects Host86, Host11, HostJ and HostX that were used to develop the respective IDE's. These projects contain the source code for the following Holonforth systems.
+The repo includes the four projects Host86, Host11, HostJ and HostX that were used to develop the respective IDE's. 
 
 
 ###Holon86 
