@@ -2,12 +2,12 @@
 The Holonforth IDE's are cross-development systems. We use the Host/Target concept usually applied to embedded systems. 
 The IDE is the host that develops into a target application - via an umbilical (tethered) connection. 
 
-Every Holonforth-DOS system is a *host* when you use it for application development. But the systems have themselves been developed as *targets* of Holon86 - including Holon86 itself (since the day when Holonforth was on its own). 
+A Holonforth-DOS system is a *host* in application development. But the systems have themselves been developed as *targets* of Holon86 - including Holon86 itself (since the day when Holonforth was on its own). 
 
 ###Projects
 Holonforth IDE's are devoted to a specific application. For a new project you create a copy of the Holon-system (86, 11, J or X) and give it the name of the project or application. The IDE stores the state of development and restarts with the project exactly as you left it. You can continue to develop immediately.
 
-The repo includes the four projects Host86, Host11, HostJ and HostX that were used to develop the respective IDE's. 
+The repo includes the four projects Host86, Host11, HostJ and HostX that created the IDE's. They contain and display the source of the Holonforth systems.
 
 
 ###Holon86 
