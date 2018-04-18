@@ -14,8 +14,6 @@ The repo includes the four projects Host86, Host11, HostJ and HostX that created
 DOS->DOS Forth IDE
 
 http://www.holonforth.com/holon86.html
-
-[GUI](https://www.holonforth.com/images/holon86.gif) 
   
 Develop umbilically from DOS to a DOS application 
 
