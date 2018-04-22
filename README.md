@@ -40,7 +40,7 @@ A universal source code handler and refactoring browser with change control (val
 
 http://www.holonforth.com/holonx.html
 
-![Image of Holon86](https://www.holonforth.com/images/holonx.gif)
+![Image of HolonX](https://www.holonforth.com/images/holonx.gif)
 
 ### DOSBox
 
