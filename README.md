@@ -14,6 +14,8 @@ The repo includes the four projects Host86, Host11, HostJ and HostX that created
 DOS->DOS Forth IDE
 
 http://www.holonforth.com/holon86.html
+
+![Image of Holon86](https://www.holonforth.com/images/holon86.gif)
   
 Develop umbilically from DOS to a DOS application 
 
@@ -21,12 +23,15 @@ Develop umbilically from DOS to a DOS application
 IDE for 68HC11 targets
 
 http://www.holonforth.com/holon11.html 
- 
+
+![Image of Holon11](https://www.holonforth.com/images/holon11.gif) 
 
 ### HolonJ
 Forth to JVM IDE
 
 http://www.holonforth.com/holonj.html
+
+![Image of HolonJ](https://www.holonforth.com/images/holonj.gif)
   
 Compiles Forth to JVM code - Write Java programs in Forth.
 
@@ -34,6 +39,8 @@ Compiles Forth to JVM code - Write Java programs in Forth.
 A universal source code handler and refactoring browser with change control (validation).
 
 http://www.holonforth.com/holonx.html
+
+![Image of Holon86](https://www.holonforth.com/images/holonx.gif)
 
 ### DOSBox
 
