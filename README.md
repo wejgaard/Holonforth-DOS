@@ -1,4 +1,4 @@
-# HolonForth - a Forth IDE inspired by Smalltalk
+# HolonForth - Forth IDE's inspired by Smalltalk
 
 ### Hosts and Targets
 The Holonforth IDE's are cross-development systems. Using the Host/Target concept usually applied to embedded systems. 
